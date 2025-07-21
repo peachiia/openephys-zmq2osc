@@ -87,12 +87,14 @@ This creates `config.json` with these key settings:
   "zmq": {
     "host": "localhost",        // OpenEphys server IP
     "data_port": 5556,         // ZMQ data port (heartbeat = port + 1)
-    "num_channels": 32         // Number of neural channels
+    "data_timeout_seconds": 5.0, // Timeout for auto-reinit
+    "auto_reinit_on_timeout": true // Auto reinit when timeout
   }
 }
 ```
 
 ### OSC Output
+
 ```json
 {
   "osc": {
@@ -119,15 +121,15 @@ This creates `config.json` with these key settings:
 
 1. **Add ZMQ Interface Plugin**
    - In OpenEphys GUI, add a **ZMQ Interface** plugin to your signal chain
-   
+
 2. **Configure the Plugin**
    - **Data Port**: 5556 (must match your config)
    - **Heartbeat Port**: 5557 (automatically data_port + 1)
    - **Application Name**: Can be anything
-   
+
 3. **Start Recording**
    - Press play in OpenEphys to start streaming data
-   
+
 4. **Run This Bridge**
    - Start `openephys-zmq2osc` to begin forwarding data
 

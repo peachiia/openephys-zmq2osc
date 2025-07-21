@@ -5,11 +5,11 @@ import argparse
 from pathlib import Path
 from typing import Optional
 
-from .config.settings import get_config_manager, ConfigManager
-from .core.services.zmq_service import ZMQService
-from .core.services.osc_service import OSCService
-from .interfaces.cli_interface import CLIInterface
-from .core.events.event_bus import get_event_bus, EventType
+from openephys_zmq2osc.config.settings import get_config_manager, ConfigManager
+from openephys_zmq2osc.core.services.zmq_service import ZMQService
+from openephys_zmq2osc.core.services.osc_service import OSCService
+from openephys_zmq2osc.interfaces.cli_interface import CLIInterface
+from openephys_zmq2osc.core.events.event_bus import get_event_bus, EventType
 
 
 class OpenEphysZMQ2OSC:

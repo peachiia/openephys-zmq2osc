@@ -160,7 +160,13 @@ class CLIInterface(BaseInterface):
         """Run the live display."""
         try:
             with self.live_display:
+                last_update = time.time()
                 while self._running:
+                    current_time = time.time()
+                    # Update layout every second to refresh clock
+                    if current_time - last_update >= 1.0:
+                        self._update_layout()
+                        last_update = current_time
                     time.sleep(0.1)  # Control update frequency
         except KeyboardInterrupt:
             self._running = False

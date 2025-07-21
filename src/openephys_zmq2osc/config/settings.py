@@ -1,5 +1,4 @@
 import json
-import os
 from typing import Dict, Any, Optional
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -12,7 +11,6 @@ class ZMQConfig:
     heartbeat_timeout: float = 2.0
     not_responding_timeout: float = 10.0
     app_uuid: str = "1618"
-    num_channels: int = 32
     buffer_size: int = 30000  # 1 second at 30kHz (minimal for real-time)
     # Auto-reinit settings
     data_timeout_seconds: float = 5.0  # Timeout period for data reinit
@@ -116,6 +114,7 @@ class ConfigManager:
         """Get current configuration."""
         if self._config is None:
             self.load()
+        assert self._config is not None, "Config should be loaded"
         return self._config
     
     def load(self) -> None:

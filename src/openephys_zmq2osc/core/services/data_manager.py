@@ -24,7 +24,7 @@ class DataManager:
         
         self.channels = [{
             "id": i,
-            "label": "",
+            "label": f"CH{i}",
             "head_sample_number": 0,
             "tail_index": 0,
             "tail_sample_number": 0,
@@ -164,20 +164,18 @@ class DataManager:
         required_channels = self.max_channel_id + 1  # 0-indexed
         while len(self.channels) < required_channels:
             new_id = len(self.channels)
+            # Use provided name if this is the target channel, otherwise use default
+            label = channel_name if (new_id == channel_id and channel_name) else f"CH{new_id}"
             self.channels.append({
                 "id": new_id,
-                "label": f"CH{new_id:03d}",  # Default label
+                "label": label,
                 "head_sample_number": 0,
                 "tail_index": 0,
                 "tail_sample_number": 0,
                 "data": np.zeros(self.buffer_size, dtype=np.float32)
             })
-        
-        # Update channel name if provided
-        if channel_name and channel_id < len(self.channels):
-            self.channels[channel_id]["label"] = channel_name
             
-        print(f"Discovered channel {channel_id} ({channel_name or f'CH{channel_id:03d}'}). Total: {len(self.discovered_channels)} channels")
+        print(f"Discovered channel {channel_id} ({channel_name or f'CH{channel_id}'}). Total: {len(self.discovered_channels)} channels")
         return False
 
     def get_discovery_status(self) -> dict:

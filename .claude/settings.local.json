@@ -8,7 +8,9 @@
       "Bash(touch:*)",
       "Bash(uv run:*)",
       "Bash(timeout 3 uv run:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(python test:*)",
+      "Bash(python:*)"
     ],
     "deny": []
   }

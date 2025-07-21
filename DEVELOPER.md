@@ -165,7 +165,7 @@ Efficient neural data buffering:
 
 ```python
 class DataManager:
-    def init_empty_buffer(self, num_channels: int, num_samples: int) -> None
+    def init_empty_buffer(self, num_channels: int, num_samples: int) -> None  # Dynamic expansion
     def push_data(self, channel_id: int, data: np.ndarray) -> None
     def pop_data_all_channels(self, num_samples: int) -> list[np.ndarray]
 ```
@@ -462,7 +462,7 @@ get_status() -> dict
 
 **DataManager**
 ```python
-init_empty_buffer(num_channels: int, num_samples: int) -> None
+init_empty_buffer(num_channels: int, num_samples: int) -> None  # Starts with 1, expands dynamically
 push_data(channel_id: int, data: np.ndarray) -> None
 pop_data_all_channels(num_samples: int) -> list[np.ndarray]
 ```

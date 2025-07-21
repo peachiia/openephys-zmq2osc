@@ -1,5 +1,9 @@
 import time
 import threading
+import select
+import sys
+import termios
+import tty
 from datetime import datetime
 from typing import Dict, Any, Optional
 from rich.console import Console
@@ -75,6 +79,18 @@ class CLIInterface(BaseInterface):
         self._error_messages = []
         self._info_messages = []
         
+        # Timeout status
+        self._timeout_status = {
+            "timeout_triggered": False,
+            "manual_reinit_available": False,
+            "timeout_seconds": 5.0,
+            "time_until_timeout": 0.0
+        }
+        
+        # Keyboard handling
+        self._keyboard_thread: Optional[threading.Thread] = None
+        self._original_termios = None
+        
         self._setup_event_subscriptions()
     
     def _setup_event_subscriptions(self) -> None:
@@ -96,6 +112,9 @@ class CLIInterface(BaseInterface):
         self.layout = self._init_layout()
         self._update_layout()
         
+        # Setup terminal for raw input
+        self._setup_terminal()
+        
         self.live_display = Live(
             self.layout, 
             console=self.console, 
@@ -106,6 +125,10 @@ class CLIInterface(BaseInterface):
         
         self._display_thread = threading.Thread(target=self._run_display, daemon=True)
         self._display_thread.start()
+        
+        # Start keyboard handling
+        self._keyboard_thread = threading.Thread(target=self._handle_keyboard_input, daemon=True)
+        self._keyboard_thread.start()
     
     def stop(self) -> None:
         """Stop the CLI interface."""
@@ -126,6 +149,12 @@ class CLIInterface(BaseInterface):
         
         if self._display_thread and self._display_thread.is_alive():
             self._display_thread.join(timeout=1.0)
+            
+        if self._keyboard_thread and self._keyboard_thread.is_alive():
+            self._keyboard_thread.join(timeout=1.0)
+            
+        # Restore terminal settings
+        self._restore_terminal()
     
     def _run_display(self) -> None:
         """Run the live display."""
@@ -295,8 +324,13 @@ class CLIInterface(BaseInterface):
         if self._info_messages:
             info_text = self._info_messages[-1]  # Show most recent info
         
+        # Left side - controls
+        left_controls = "[dim]Press Ctrl+C to quit[/dim]"
+        if self._timeout_status.get("manual_reinit_available", False):
+            left_controls += " | [val_warning]Ctrl+F to reinit[/val_warning]"
+        
         grid.add_row(
-            "[dim]Press Ctrl+C to quit[/dim]",
+            left_controls,
             info_text,
             f"[dim]Refresh: {self.config.ui.refresh_rate}Hz[/dim]"
         )
@@ -366,7 +400,12 @@ class CLIInterface(BaseInterface):
 
     def _on_status_update(self, event: Event) -> None:
         """Handle status update events."""
-        if event.data and event.data.get("type") == "channel_discovery_complete":
+        if not event.data:
+            return
+            
+        event_type = event.data.get("type")
+        
+        if event_type == "channel_discovery_complete":
             # Channel discovery completed
             self._channel_info.update({
                 "discovery_mode": False,
@@ -377,7 +416,44 @@ class CLIInterface(BaseInterface):
             
             # Show completion message
             self.show_message(f"Channel discovery complete! Found {self._channel_info['total_channels']} channels.", "info")
-            self._update_layout()
+            
+        elif event_type == "data_timeout_warning":
+            # Data timeout detected - show warning and enable manual reinit
+            timeout_status = event.data.get("timeout_status", {})
+            self._timeout_status.update(timeout_status)
+            self._timeout_status["manual_reinit_available"] = True
+            
+            timeout_sec = timeout_status.get("timeout_seconds", 5)
+            self.show_message(f"Data timeout ({timeout_sec}s) - Press Ctrl+F to reinit channels", "warning")
+            
+        elif event_type == "auto_reinit_completed":
+            # Auto reinit completed
+            prev_channels = event.data.get("previous_channels", 0)
+            timeout_sec = event.data.get("timeout_seconds", 5)
+            self._timeout_status["manual_reinit_available"] = False
+            self._timeout_status["timeout_triggered"] = False
+            
+            self.show_message(f"Auto reinit: {prev_channels} → 1 channel (timeout: {timeout_sec}s)", "info")
+            
+        elif event_type == "manual_reinit_completed":
+            # Manual reinit completed
+            prev_channels = event.data.get("previous_channels", 0)
+            self._timeout_status["manual_reinit_available"] = False
+            self._timeout_status["timeout_triggered"] = False
+            
+            self.show_message(f"Manual reinit: {prev_channels} → 1 channel", "info")
+            
+        elif event_type == "manual_reinit_request":
+            # Manual reinit was requested - forward to ZMQ service
+            self._event_bus.publish_event(
+                EventType.STATUS_UPDATE,
+                data={
+                    "type": "execute_manual_reinit"
+                },
+                source="CLIInterface"
+            )
+            
+        self._update_layout()
     
     def update_zmq_status(self, status_data: Dict[str, Any]) -> None:
         """Update ZMQ status display."""
@@ -424,3 +500,55 @@ class CLIInterface(BaseInterface):
     def clear_screen(self) -> None:
         """Clear the console screen."""
         self.console.clear()
+    
+    def _setup_terminal(self) -> None:
+        """Setup terminal for raw keyboard input."""
+        if hasattr(sys.stdin, 'fileno') and sys.stdin.isatty():
+            try:
+                self._original_termios = termios.tcgetattr(sys.stdin.fileno())
+                tty.setcbreak(sys.stdin.fileno())
+            except (termios.error, OSError):
+                self._original_termios = None
+    
+    def _restore_terminal(self) -> None:
+        """Restore original terminal settings."""
+        if self._original_termios and hasattr(sys.stdin, 'fileno'):
+            try:
+                termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self._original_termios)
+            except (termios.error, OSError):
+                pass
+    
+    def _handle_keyboard_input(self) -> None:
+        """Handle keyboard input in a separate thread."""
+        while self._running:
+            if hasattr(sys.stdin, 'fileno') and sys.stdin.isatty():
+                try:
+                    # Check if input is available without blocking
+                    ready, _, _ = select.select([sys.stdin], [], [], 0.1)
+                    if ready:
+                        key = sys.stdin.read(1)
+                        if key == '\x06':  # Ctrl+F
+                            self._handle_manual_reinit_request()
+                        elif key == '\x03':  # Ctrl+C
+                            self._running = False
+                            break
+                except (OSError, IOError):
+                    time.sleep(0.1)
+            else:
+                time.sleep(0.1)
+    
+    def _handle_manual_reinit_request(self) -> None:
+        """Handle manual reinit request via Ctrl+F."""
+        if self._timeout_status.get("manual_reinit_available", False):
+            # Publish manual reinit request event
+            self._event_bus.publish_event(
+                EventType.STATUS_UPDATE,
+                data={
+                    "type": "manual_reinit_request",
+                    "source": "cli_interface"
+                },
+                source="CLIInterface"
+            )
+            self.show_message("Manual reinit requested...", "info")
+        else:
+            self.show_message("Manual reinit not available (data is being received)", "warning")

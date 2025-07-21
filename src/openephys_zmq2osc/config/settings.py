@@ -14,6 +14,9 @@ class ZMQConfig:
     app_uuid: str = "1618"
     num_channels: int = 32
     buffer_size: int = 30000  # 1 second at 30kHz (minimal for real-time)
+    # Auto-reinit settings
+    data_timeout_seconds: float = 5.0  # Timeout period for data reinit
+    auto_reinit_on_timeout: bool = True  # Auto reinit or manual prompt
 
 
 @dataclass

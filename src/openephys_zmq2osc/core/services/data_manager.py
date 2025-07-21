@@ -1,4 +1,5 @@
 import numpy as np
+import time
 
 
 class DataManager:
@@ -9,6 +10,12 @@ class DataManager:
         self.channel_discovery_mode = True  # True until we detect full channel set
         self.discovered_channels = set()  # Track which channels we've seen
         self.max_channel_id = -1  # Highest channel ID discovered
+        
+        # Timeout tracking
+        self.last_data_time = time.time()  # Track when data was last received
+        self.timeout_seconds = 5.0  # Default timeout period
+        self.auto_reinit_enabled = False  # Whether to auto-reinit on timeout
+        self.timeout_triggered = False  # Whether timeout has been triggered
 
     def init_empty_buffer(self, num_channels: int, num_samples: int) -> None:
         """Initialize an empty buffer for a given number of channels and samples."""
@@ -54,6 +61,9 @@ class DataManager:
         channel['tail_index'] = (tail_index + num_samples) % self.buffer_size
         channel['tail_sample_number'] += num_samples
         self.update_lowest_tail_index()
+        
+        # Update data timestamp
+        self.update_data_timestamp()
 
     def pop_data(self, channel_id: int, num_samples_to_pop: int) -> np.ndarray:
         """Remove data from the buffer for a given channel."""
@@ -191,3 +201,75 @@ class DataManager:
             }
             for ch in self.channels
         ]
+
+    def configure_timeout(self, timeout_seconds: float, auto_reinit: bool = False) -> None:
+        """Configure timeout settings."""
+        self.timeout_seconds = timeout_seconds
+        self.auto_reinit_enabled = auto_reinit
+        self.timeout_triggered = False  # Reset timeout flag
+
+    def update_data_timestamp(self) -> None:
+        """Update the last data received timestamp."""
+        self.last_data_time = time.time()
+        self.timeout_triggered = False  # Reset timeout when new data arrives
+
+    def check_timeout(self) -> bool:
+        """
+        Check if data timeout has been reached.
+        Returns True if timeout occurred (first time only).
+        """
+        if self.timeout_triggered:
+            return False  # Already handled
+            
+        current_time = time.time()
+        time_since_data = current_time - self.last_data_time
+        
+        if time_since_data >= self.timeout_seconds:
+            self.timeout_triggered = True
+            return True
+            
+        return False
+
+    def get_timeout_status(self) -> dict:
+        """Get current timeout status information."""
+        current_time = time.time()
+        time_since_data = current_time - self.last_data_time
+        
+        return {
+            "timeout_seconds": self.timeout_seconds,
+            "time_since_data": time_since_data,
+            "timeout_triggered": self.timeout_triggered,
+            "auto_reinit_enabled": self.auto_reinit_enabled,
+            "can_manual_reinit": not self.is_receiving_data(),
+            "time_until_timeout": max(0, self.timeout_seconds - time_since_data)
+        }
+
+    def is_receiving_data(self) -> bool:
+        """Check if data is currently being received (within last 1 second)."""
+        return (time.time() - self.last_data_time) < 1.0
+
+    def reinit_for_new_setup(self) -> dict:
+        """
+        Reinitialize the DataManager for a new channel setup.
+        Returns previous state information.
+        """
+        previous_state = {
+            "discovered_channels": list(self.discovered_channels),
+            "total_channels": len(self.discovered_channels),
+            "buffer_channels": len(self.channels)
+        }
+        
+        # Reset to initial state
+        self.channels = []
+        self.discovered_channels = set()
+        self.max_channel_id = -1
+        self.channel_discovery_mode = True
+        self.lowest_tail_index = 0
+        self.timeout_triggered = False
+        self.last_data_time = time.time()
+        
+        # Reinitialize with minimal buffer
+        self.init_empty_buffer(num_channels=1, num_samples=self.buffer_size)
+        
+        print(f"DataManager reinitialized: {previous_state['total_channels']} → 1 channel")
+        return previous_state

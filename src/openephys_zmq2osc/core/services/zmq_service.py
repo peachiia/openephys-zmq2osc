@@ -22,7 +22,7 @@ class ConnectionStatus(Enum):
 
 
 class ZMQService:
-    def __init__(self, ip: str = "localhost", data_port: int = 5556):
+    def __init__(self, ip: str = "localhost", data_port: int = 5556, config=None):
         self.context: Optional[zmq.Context] = None
         self.heartbeat_socket: Optional[zmq.Socket] = None
         self.data_socket: Optional[zmq.Socket] = None
@@ -53,10 +53,20 @@ class ZMQService:
         # Start with minimal buffer, will expand dynamically
         self.data_manager.init_empty_buffer(num_channels=1, num_samples=30000)
         
+        # Configure timeout settings if config provided
+        if config and hasattr(config, 'zmq'):
+            self.data_manager.configure_timeout(
+                timeout_seconds=config.zmq.data_timeout_seconds,
+                auto_reinit=config.zmq.auto_reinit_on_timeout
+            )
+        
         # Threading
         self._running = False
         self._thread: Optional[threading.Thread] = None
         self._event_bus = get_event_bus()
+        
+        # Subscribe to manual reinit events
+        self._event_bus.subscribe(EventType.STATUS_UPDATE, self._on_status_update)
         
     def start(self) -> None:
         """Start the ZMQ service in a separate thread."""
@@ -74,6 +84,7 @@ class ZMQService:
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=5.0)
         self._cleanup()
+        self._event_bus.unsubscribe(EventType.STATUS_UPDATE, self._on_status_update)
         self._event_bus.publish_event(EventType.SERVICE_STOPPED, source="ZMQService")
         
     def _init_sockets(self) -> None:
@@ -152,6 +163,64 @@ class ZMQService:
                     self._reconnect()
             else:
                 self._send_heartbeat()
+    
+    def _handle_data_timeout(self) -> None:
+        """Handle data timeout scenarios."""
+        if self.data_manager.check_timeout():
+            timeout_status = self.data_manager.get_timeout_status()
+            
+            if self.data_manager.auto_reinit_enabled:
+                # Perform automatic reinit
+                previous_state = self.data_manager.reinit_for_new_setup()
+                self._event_bus.publish_event(
+                    EventType.STATUS_UPDATE,
+                    data={
+                        "type": "auto_reinit_completed",
+                        "previous_channels": previous_state["total_channels"],
+                        "timeout_seconds": timeout_status["timeout_seconds"]
+                    },
+                    source="ZMQService"
+                )
+                print(f"Auto-reinit: {previous_state['total_channels']} → 1 channel (timeout: {timeout_status['timeout_seconds']}s)")
+            else:
+                # Publish timeout warning for manual handling
+                self._event_bus.publish_event(
+                    EventType.STATUS_UPDATE,
+                    data={
+                        "type": "data_timeout_warning",
+                        "timeout_status": timeout_status,
+                        "manual_reinit_available": True
+                    },
+                    source="ZMQService"
+                )
+    
+    def manual_reinit_data_manager(self) -> dict:
+        """Manually reinitialize DataManager (triggered by user)."""
+        previous_state = self.data_manager.reinit_for_new_setup()
+        self._event_bus.publish_event(
+            EventType.STATUS_UPDATE,
+            data={
+                "type": "manual_reinit_completed",
+                "previous_channels": previous_state["total_channels"]
+            },
+            source="ZMQService"
+        )
+        return previous_state
+    
+    def _on_status_update(self, event) -> None:
+        """Handle status update events for manual reinit."""
+        if event.data and event.data.get("type") == "execute_manual_reinit":
+            if not self.data_manager.is_receiving_data():
+                self.manual_reinit_data_manager()
+            else:
+                self._event_bus.publish_event(
+                    EventType.STATUS_UPDATE,
+                    data={
+                        "type": "manual_reinit_denied",
+                        "reason": "data_currently_receiving"
+                    },
+                    source="ZMQService"
+                )
     
     def _reconnect(self) -> None:
         """Reconnect to OpenEphys server."""
@@ -333,6 +402,7 @@ class ZMQService:
         while self._running:
             try:
                 self._handle_heartbeat_timeout()
+                self._handle_data_timeout()
                 
                 if not self.poller:
                     time.sleep(0.1)

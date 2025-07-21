@@ -4,7 +4,7 @@ import numpy as np
 class DataManager:
     def __init__(self):
         self.channels = []
-        self.buffer_size = 300000  # 10 Seconds of data at 30kHz sample rate
+        self.buffer_size = 30000  # 1 Second of data at 30kHz sample rate (minimal buffering)
         self.lowest_tail_index = 0  # Track the lowest tail index across all channels
 
     def init_empty_buffer(self, num_channels: int, num_samples: int) -> None:
@@ -107,3 +107,9 @@ class DataManager:
         if channel_id < 0 or channel_id >= len(self.channels):
             raise ValueError("Invalid channel ID.")
         return self.channels[channel_id].copy()
+    
+    def has_data_ready(self, min_samples: int = 1) -> bool:
+        """Check if we have minimum samples ready across all channels."""
+        if not self.channels:
+            return False
+        return self.lowest_tail_index >= min_samples

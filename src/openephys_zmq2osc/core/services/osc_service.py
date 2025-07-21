@@ -102,7 +102,8 @@ class OSCService:
             if data_to_process:
                 self._send_data(data_to_process)
             else:
-                time.sleep(0.001)  # Small sleep to prevent busy waiting
+                # Minimal sleep for high-performance real-time processing
+                time.sleep(0.0001)  # 0.1ms instead of 1ms for lower latency
     
     def _send_data(self, datalist: List[np.ndarray]) -> None:
         """Send data via OSC."""

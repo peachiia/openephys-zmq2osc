@@ -50,7 +50,7 @@ class ZMQService:
         
         # Data management
         self.data_manager = DataManager()
-        self.data_manager.init_empty_buffer(num_channels=32, num_samples=60000)
+        self.data_manager.init_empty_buffer(num_channels=32, num_samples=30000)
         
         # Threading
         self._running = False
@@ -206,7 +206,7 @@ class ZMQService:
             channel_name = content.get('channel_name', f"CH{channel_num}")
             num_samples = content['num_samples']
             
-            print(f"Received data: {num_samples} samples, channel {channel_num} ({channel_name})")
+            # Removed debug print to prevent UI glitches
             
             if len(message) > 2:
                 n_arr = np.frombuffer(message[2], dtype=np.float32)
@@ -224,8 +224,9 @@ class ZMQService:
                     source="ZMQService"
                 )
                 
-                # Check if we have data to process across all channels
-                if self.data_manager.lowest_tail_index > 0:
+                # Process data immediately with minimal buffering
+                # Send data as soon as we have any samples available (real-time mode)
+                if self.data_manager.has_data_ready(min_samples=1):
                     self._process_buffered_data()
                     
         except (IndexError, ValueError) as e:

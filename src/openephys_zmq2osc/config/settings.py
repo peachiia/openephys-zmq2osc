@@ -13,7 +13,7 @@ class ZMQConfig:
     not_responding_timeout: float = 10.0
     app_uuid: str = "1618"
     num_channels: int = 32
-    buffer_size: int = 300000  # 10 seconds at 30kHz
+    buffer_size: int = 30000  # 1 second at 30kHz (minimal for real-time)
 
 
 @dataclass

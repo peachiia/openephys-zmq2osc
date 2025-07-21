@@ -60,7 +60,9 @@ class CLIInterface(BaseInterface):
             "host": config.osc.host,
             "port": config.osc.port,
             "messages_sent": 0,
-            "queue_size": 0
+            "queue_size": 0,
+            "avg_delay_ms": 0.0,
+            "calculated_sample_rate": 30000.0
         }
         
         self._data_stats = {
@@ -248,17 +250,24 @@ class CLIInterface(BaseInterface):
             channels_info = f"{self._channel_info['total_channels']} channels ready"
             grid.add_row("Channels", f"[val_success]{channels_info}[/val_success]")
             
-            # Show channel list (first few channels)
+            # Show channel list with OSC mapping (first few channels)
             if self._channel_info["channel_list"]:
-                channel_names = []
-                for ch in self._channel_info["channel_list"][:6]:  # Show first 6
+                channel_mappings = []
+                for ch in self._channel_info["channel_list"][:4]:  # Show first 4 for OSC mapping
                     if ch.get("discovered", False):
-                        channel_names.append(f"[val_success]{ch['label']}[/val_success]")
+                        ch_id = ch.get("id", 0)
+                        ch_label = ch.get("label", f"CH{ch_id}")
+                        osc_addr = f"/ch{ch_id:03d}"
+                        mapping = f"{ch_label}→{osc_addr}"
+                        channel_mappings.append(f"[val_success]{mapping}[/val_success]")
                     else:
-                        channel_names.append(f"[dim]{ch['label']}[/dim]")
+                        ch_id = ch.get("id", 0) 
+                        ch_label = ch.get("label", f"CH{ch_id}")
+                        mapping = f"{ch_label}→/ch{ch_id:03d}"
+                        channel_mappings.append(f"[dim]{mapping}[/dim]")
                 
-                more_text = f" +{len(self._channel_info['channel_list'])-6}" if len(self._channel_info["channel_list"]) > 6 else ""
-                grid.add_row("", f"[dim]{', '.join(channel_names)}{more_text}[/dim]")
+                more_text = f" +{len(self._channel_info['channel_list'])-4}" if len(self._channel_info["channel_list"]) > 4 else ""
+                grid.add_row("OSC Mapping", f"[dim]{', '.join(channel_mappings)}{more_text}[/dim]")
         else:
             grid.add_row("Channels", "Waiting for data...")
         
@@ -290,7 +299,14 @@ class CLIInterface(BaseInterface):
         else:
             channels_text = "Auto-detect"
         grid.add_row("Channels", channels_text)
-        grid.add_row("Sample Rate", "30000 Hz")  # Default OpenEphys rate
+        
+        # Dynamic sampling rate display
+        sample_rate = self._osc_status.get("calculated_sample_rate", 30000.0)
+        if sample_rate != 30000.0:
+            rate_text = f"{sample_rate:.1f} Hz"
+        else:
+            rate_text = "30000 Hz (default)"
+        grid.add_row("Sample Rate", rate_text)
         
         grid.add_row(Rule(style="grid_rule"), Rule(style="grid_rule"))
         
@@ -311,8 +327,26 @@ class CLIInterface(BaseInterface):
         
         # Statistics
         if self._osc_status["messages_sent"] > 0:
+            # Messages and queue info
             stats = f"Sent: {self._osc_status['messages_sent']} | Queue: {self._osc_status['queue_size']}"
-            grid.add_row(stats, "")
+            grid.add_row("Messages", stats)
+            
+            # Delay information
+            delay_ms = self._osc_status.get("avg_delay_ms", 0.0)
+            if delay_ms > 0:
+                if delay_ms < 1.0:
+                    delay_text = f"{delay_ms:.2f} ms"
+                    delay_style = "val_success"  # Green for low delay
+                elif delay_ms < 5.0:
+                    delay_text = f"{delay_ms:.1f} ms"
+                    delay_style = "val_warning"  # Yellow for moderate delay
+                else:
+                    delay_text = f"{delay_ms:.1f} ms"
+                    delay_style = "val_error"    # Red for high delay
+                
+                grid.add_row("OSC Delay", f"[{delay_style}]{delay_text}[/{delay_style}]")
+            else:
+                grid.add_row("OSC Delay", "[dim]Calculating...[/dim]")
         else:
             grid.add_row("No Data Sent", "")
         
@@ -401,6 +435,9 @@ class CLIInterface(BaseInterface):
         """Handle data sent events."""
         if event.data:
             self._osc_status["messages_sent"] = event.data.get("messages_sent", 0)
+            self._osc_status["queue_size"] = event.data.get("queue_size", 0)
+            self._osc_status["avg_delay_ms"] = event.data.get("avg_delay_ms", 0.0)
+            self._osc_status["calculated_sample_rate"] = event.data.get("calculated_sample_rate", 30000.0)
             self._data_stats["samples_processed"] = event.data.get("num_samples", 0)
             self._update_layout()
 

@@ -24,6 +24,16 @@ class OSCService:
         self._last_send_time = 0
         self._connection_active = False
         
+        # Delay tracking
+        self._data_receive_times = []  # Queue of (timestamp, data) for delay calculation
+        self._recent_delays = []  # Track recent delays for averaging
+        self._max_delay_history = 100  # Keep last 100 delay measurements
+        
+        # Sampling rate tracking  
+        self._sample_timestamps = []  # Track when samples arrive
+        self._samples_per_message = 0
+        self._calculated_sample_rate = 30000.0  # Default fallback
+        
         # Configuration
         self.base_address = "/data"
         self.send_individual_channels = False
@@ -61,6 +71,41 @@ class OSCService:
                 data={"error": str(e), "host": self.host, "port": self.port},
                 source="OSCService"
             )
+    
+    def _update_sampling_rate(self) -> None:
+        """Calculate actual sampling rate from incoming data."""
+        if len(self._sample_timestamps) < 2:
+            return
+            
+        # Calculate time span and total samples
+        time_span = self._sample_timestamps[-1] - self._sample_timestamps[0]
+        if time_span <= 0:
+            return
+            
+        # Number of sample packets received
+        num_packets = len(self._sample_timestamps)
+        total_samples = num_packets * self._samples_per_message
+        
+        # Calculate actual sampling rate
+        self._calculated_sample_rate = total_samples / time_span
+    
+    def get_delay_stats(self) -> dict:
+        """Get current delay statistics."""
+        if not self._recent_delays:
+            return {
+                "avg_delay_ms": 0.0,
+                "min_delay_ms": 0.0,
+                "max_delay_ms": 0.0,
+                "queue_size": len(self._data_queue)
+            }
+        
+        return {
+            "avg_delay_ms": sum(self._recent_delays) / len(self._recent_delays),
+            "min_delay_ms": min(self._recent_delays),
+            "max_delay_ms": max(self._recent_delays),
+            "queue_size": len(self._data_queue),
+            "sample_rate": self._calculated_sample_rate
+        }
     
     def stop(self) -> None:
         """Stop the OSC service."""
@@ -108,8 +153,26 @@ class OSCService:
             
         datalist = event.data.get("datalist")
         if datalist:
+            receive_time = time.time()
+            
+            # Track for delay calculation
+            self._data_receive_times.append(receive_time)
+            # Keep only recent timestamps
+            if len(self._data_receive_times) > self._max_delay_history:
+                self._data_receive_times.pop(0)
+            
+            # Track for sampling rate calculation
+            num_samples = event.data.get("num_samples", 0)
+            if num_samples > 0:
+                self._samples_per_message = num_samples
+                self._sample_timestamps.append(receive_time)
+                # Keep only recent timestamps (last 50 for ~1.5 second window)
+                if len(self._sample_timestamps) > 50:
+                    self._sample_timestamps.pop(0)
+                self._update_sampling_rate()
+            
             with self._queue_lock:
-                self._data_queue.append(datalist)
+                self._data_queue.append((receive_time, datalist))
     
     def _run(self) -> None:
         """Main processing loop."""
@@ -121,12 +184,21 @@ class OSCService:
                     data_to_process = self._data_queue.pop(0)
             
             if data_to_process:
-                self._send_data(data_to_process)
+                receive_time, datalist = data_to_process
+                send_time = time.time()
+                
+                # Calculate and track delay
+                delay_ms = (send_time - receive_time) * 1000  # Convert to milliseconds
+                self._recent_delays.append(delay_ms)
+                if len(self._recent_delays) > self._max_delay_history:
+                    self._recent_delays.pop(0)
+                
+                self._send_data(datalist, delay_ms)
             else:
                 # Minimal sleep for high-performance real-time processing
                 time.sleep(0.0001)  # 0.1ms instead of 1ms for lower latency
     
-    def _send_data(self, datalist: List[np.ndarray]) -> None:
+    def _send_data(self, datalist: List[np.ndarray], delay_ms: float = 0.0) -> None:
         """Send data via OSC."""
         if not self.client or not self._connection_active:
             return
@@ -140,13 +212,21 @@ class OSCService:
             self._messages_sent += 1
             self._last_send_time = time.time()
             
-            # Publish send confirmation
+            # Calculate statistics
+            avg_delay = sum(self._recent_delays) / len(self._recent_delays) if self._recent_delays else 0.0
+            queue_size = len(self._data_queue)
+            
+            # Publish send confirmation with delay and sampling rate info
             self._event_bus.publish_event(
                 EventType.DATA_SENT,
                 data={
                     "num_channels": len(datalist),
                     "num_samples": len(datalist[0]) if datalist else 0,
-                    "messages_sent": self._messages_sent
+                    "messages_sent": self._messages_sent,
+                    "queue_size": queue_size,
+                    "delay_ms": delay_ms,
+                    "avg_delay_ms": avg_delay,
+                    "calculated_sample_rate": self._calculated_sample_rate
                 },
                 source="OSCService"
             )

@@ -67,18 +67,39 @@ class OSCService:
         self._running = False
         
         # Unsubscribe from events
-        self._event_bus.unsubscribe(EventType.DATA_PROCESSED, self._on_data_received)
+        try:
+            self._event_bus.unsubscribe(EventType.DATA_PROCESSED, self._on_data_received)
+        except Exception as e:
+            print(f"Error unsubscribing from events: {e}")
         
+        # Wait for thread to finish
         if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=5.0)
-            
-        self._connection_active = False
-        self.client = None
+            try:
+                self._thread.join(timeout=5.0)
+                if self._thread.is_alive():
+                    print("Warning: OSC thread did not terminate within timeout")
+            except Exception as e:
+                print(f"Error joining OSC thread: {e}")
+                
+        # Cleanup client
+        try:
+            self._connection_active = False
+            if self.client:
+                # If the client has explicit cleanup, call it
+                if hasattr(self.client, 'close'):
+                    self.client.close()
+                self.client = None
+        except Exception as e:
+            print(f"Error cleaning up OSC client: {e}")
         
-        self._event_bus.publish_event(
-            EventType.SERVICE_STOPPED,
-            source="OSCService"
-        )
+        # Publish stopped event (if event bus is still working)
+        try:
+            self._event_bus.publish_event(
+                EventType.SERVICE_STOPPED,
+                source="OSCService"
+            )
+        except Exception as e:
+            print(f"Error publishing service stopped event: {e}")
     
     def _on_data_received(self, event: Event) -> None:
         """Handle data received from ZMQ service."""

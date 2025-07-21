@@ -81,11 +81,33 @@ class ZMQService:
     def stop(self) -> None:
         """Stop the ZMQ service."""
         self._running = False
+        
+        # Wait for thread to finish
         if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=5.0)
-        self._cleanup()
-        self._event_bus.unsubscribe(EventType.STATUS_UPDATE, self._on_status_update)
-        self._event_bus.publish_event(EventType.SERVICE_STOPPED, source="ZMQService")
+            try:
+                self._thread.join(timeout=5.0)
+                if self._thread.is_alive():
+                    print("Warning: ZMQ thread did not terminate within timeout")
+            except Exception as e:
+                print(f"Error joining ZMQ thread: {e}")
+        
+        # Cleanup ZMQ resources
+        try:
+            self._cleanup()
+        except Exception as e:
+            print(f"Error during ZMQ cleanup: {e}")
+        
+        # Unsubscribe from events
+        try:
+            self._event_bus.unsubscribe(EventType.STATUS_UPDATE, self._on_status_update)
+        except Exception as e:
+            print(f"Error unsubscribing from events: {e}")
+            
+        # Publish stopped event (if event bus is still working)
+        try:
+            self._event_bus.publish_event(EventType.SERVICE_STOPPED, source="ZMQService")
+        except Exception as e:
+            print(f"Error publishing service stopped event: {e}")
         
     def _init_sockets(self) -> None:
         """Initialize ZMQ sockets."""
@@ -209,6 +231,10 @@ class ZMQService:
     
     def _on_status_update(self, event) -> None:
         """Handle status update events for manual reinit."""
+        # Prevent infinite recursion - only handle events from other sources
+        if event.source == "ZMQService":
+            return
+            
         if event.data and event.data.get("type") == "execute_manual_reinit":
             if not self.data_manager.is_receiving_data():
                 self.manual_reinit_data_manager()
@@ -431,19 +457,42 @@ class ZMQService:
     def _cleanup(self) -> None:
         """Clean up resources."""
         try:
+            # Unregister sockets from poller first
             if self.poller:
-                if self.data_socket:
-                    self.poller.unregister(self.data_socket)
-                if self.heartbeat_socket:
-                    self.poller.unregister(self.heartbeat_socket)
+                try:
+                    if self.data_socket:
+                        self.poller.unregister(self.data_socket)
+                except Exception as e:
+                    print(f"Error unregistering data socket: {e}")
+                try:
+                    if self.heartbeat_socket:
+                        self.poller.unregister(self.heartbeat_socket)
+                except Exception as e:
+                    print(f"Error unregistering heartbeat socket: {e}")
             
+            # Close sockets with proper linger settings
             if self.data_socket:
-                self.data_socket.close()
+                try:
+                    # Set linger to 0 to avoid blocking on close
+                    self.data_socket.setsockopt(zmq.LINGER, 0)
+                    self.data_socket.close()
+                except Exception as e:
+                    print(f"Error closing data socket: {e}")
             if self.heartbeat_socket:
-                self.heartbeat_socket.close()
+                try:
+                    # Set linger to 0 to avoid blocking on close  
+                    self.heartbeat_socket.setsockopt(zmq.LINGER, 0)
+                    self.heartbeat_socket.close()
+                except Exception as e:
+                    print(f"Error closing heartbeat socket: {e}")
+            
+            # Terminate context
             if self.context:
-                self.context.term()
-                
+                try:
+                    self.context.term()
+                except Exception as e:
+                    print(f"Error terminating ZMQ context: {e}")
+                    
         except Exception as e:
             print(f"Error during cleanup: {e}")
         finally:

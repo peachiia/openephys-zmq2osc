@@ -10,7 +10,9 @@
       "Bash(timeout 3 uv run:*)",
       "Bash(rm:*)",
       "Bash(python test:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(./openephys-zmq2osc-darwin-arm64:*)",
+      "Bash(timeout:*)"
     ],
     "deny": []
   }

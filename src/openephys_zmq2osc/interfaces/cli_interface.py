@@ -409,6 +409,10 @@ class CLIInterface(BaseInterface):
         if not event.data:
             return
             
+        # Prevent infinite recursion - don't process our own events
+        if event.source == "CLIInterface":
+            return
+            
         event_type = event.data.get("type")
         
         if event_type == "channel_discovery_complete":

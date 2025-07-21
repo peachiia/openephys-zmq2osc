@@ -48,7 +48,7 @@ class OpenEphysZMQ2OSC:
         """Set up signal handlers for graceful shutdown."""
         def signal_handler(signum, frame):
             print("\nShutdown requested...")
-            self.shutdown()
+            self._shutdown_requested = True  # Just set flag, don't call shutdown directly
         
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
@@ -99,25 +99,30 @@ class OpenEphysZMQ2OSC:
         self._shutdown_requested = True
         print("Shutting down services...")
         
-        try:
-            # Stop interface first
-            if self.interface:
+        # Stop interface first (safest - no network operations)
+        if self.interface:
+            try:
                 print("Stopping interface...")
                 self.interface.stop()
-            
-            # Stop services
-            if self.osc_service:
+            except Exception as e:
+                print(f"Error stopping interface: {e}")
+        
+        # Stop services (may have network cleanup)
+        if self.osc_service:
+            try:
                 print("Stopping OSC service...")
                 self.osc_service.stop()
-            
-            if self.zmq_service:
+            except Exception as e:
+                print(f"Error stopping OSC service: {e}")
+        
+        if self.zmq_service:
+            try:
                 print("Stopping ZMQ service...")
                 self.zmq_service.stop()
-            
-            print("Shutdown complete")
-            
-        except Exception as e:
-            print(f"Error during shutdown: {e}")
+            except Exception as e:
+                print(f"Error stopping ZMQ service: {e}")
+        
+        print("Shutdown complete")
     
     def get_status(self) -> dict:
         """Get overall application status."""

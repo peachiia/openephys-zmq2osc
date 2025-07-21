@@ -6,6 +6,9 @@ class DataManager:
         self.channels = []
         self.buffer_size = 30000  # 1 Second of data at 30kHz sample rate (minimal buffering)
         self.lowest_tail_index = 0  # Track the lowest tail index across all channels
+        self.channel_discovery_mode = True  # True until we detect full channel set
+        self.discovered_channels = set()  # Track which channels we've seen
+        self.max_channel_id = -1  # Highest channel ID discovered
 
     def init_empty_buffer(self, num_channels: int, num_samples: int) -> None:
         """Initialize an empty buffer for a given number of channels and samples."""
@@ -92,10 +95,22 @@ class DataManager:
         return popped_data  # list of popped data for each channel
     
     def update_lowest_tail_index(self) -> None:
-        """Update the lowest tail index across all channels."""
-        if not self.channels:
+        """Update the lowest tail index across discovered channels only."""
+        if not self.channels or not self.discovered_channels:
+            self.lowest_tail_index = 0
             return
-        self.lowest_tail_index = min(channel['tail_index'] for channel in self.channels)
+        
+        # Only consider discovered channels for data readiness
+        discovered_tail_indices = [
+            self.channels[ch_id]['tail_index'] 
+            for ch_id in self.discovered_channels 
+            if ch_id < len(self.channels)
+        ]
+        
+        if discovered_tail_indices:
+            self.lowest_tail_index = min(discovered_tail_indices)
+        else:
+            self.lowest_tail_index = 0
 
     @property
     def num_channels(self) -> int:
@@ -112,4 +127,67 @@ class DataManager:
         """Check if we have minimum samples ready across all channels."""
         if not self.channels:
             return False
+        # Don't send data during channel discovery phase
+        if self.channel_discovery_mode:
+            return False
         return self.lowest_tail_index >= min_samples
+
+    def add_or_expand_channel(self, channel_id: int, channel_name: str = None) -> bool:
+        """
+        Add a new channel or expand buffer if needed.
+        Returns True if this completes channel discovery.
+        """
+        # Track discovered channels
+        if channel_id in self.discovered_channels:
+            # Channel repeat detected - discovery complete!
+            if self.channel_discovery_mode:
+                print(f"Channel discovery complete! Detected {len(self.discovered_channels)} channels.")
+                self.channel_discovery_mode = False
+                return True
+            return False
+        
+        # New channel discovered
+        self.discovered_channels.add(channel_id)
+        self.max_channel_id = max(self.max_channel_id, channel_id)
+        
+        # Expand buffer if needed
+        required_channels = self.max_channel_id + 1  # 0-indexed
+        while len(self.channels) < required_channels:
+            new_id = len(self.channels)
+            self.channels.append({
+                "id": new_id,
+                "label": f"CH{new_id:03d}",  # Default label
+                "head_sample_number": 0,
+                "tail_index": 0,
+                "tail_sample_number": 0,
+                "data": np.zeros(self.buffer_size, dtype=np.float32)
+            })
+        
+        # Update channel name if provided
+        if channel_name and channel_id < len(self.channels):
+            self.channels[channel_id]["label"] = channel_name
+            
+        print(f"Discovered channel {channel_id} ({channel_name or f'CH{channel_id:03d}'}). Total: {len(self.discovered_channels)} channels")
+        return False
+
+    def get_discovery_status(self) -> dict:
+        """Get current channel discovery status."""
+        return {
+            "discovery_mode": self.channel_discovery_mode,
+            "discovered_channels": sorted(list(self.discovered_channels)),
+            "total_channels": len(self.discovered_channels),
+            "max_channel_id": self.max_channel_id,
+            "buffer_channels": len(self.channels)
+        }
+
+    def get_channel_info_all(self) -> list:
+        """Get information about all channels."""
+        return [
+            {
+                "id": ch["id"],
+                "label": ch["label"],
+                "tail_samples": ch["tail_sample_number"],
+                "discovered": ch["id"] in self.discovered_channels
+            }
+            for ch in self.channels
+        ]

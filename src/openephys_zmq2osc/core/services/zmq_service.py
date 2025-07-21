@@ -48,9 +48,10 @@ class ZMQService:
         # Connection status
         self.connection_status = ConnectionStatus.NOT_CONNECTED
         
-        # Data management
+        # Data management with dynamic channel discovery
         self.data_manager = DataManager()
-        self.data_manager.init_empty_buffer(num_channels=32, num_samples=30000)
+        # Start with minimal buffer, will expand dynamically
+        self.data_manager.init_empty_buffer(num_channels=1, num_samples=30000)
         
         # Threading
         self._running = False
@@ -199,33 +200,50 @@ class ZMQService:
                 print("Message content:", message[1])
     
     def _process_data_frame(self, header: dict, message: list) -> None:
-        """Process data frame from OpenEphys."""
+        """Process data frame from OpenEphys with dynamic channel discovery."""
         try:
             content = header['content']
             channel_num = content['channel_num']
             channel_name = content.get('channel_name', f"CH{channel_num}")
             num_samples = content['num_samples']
             
-            # Removed debug print to prevent UI glitches
-            
             if len(message) > 2:
+                # Dynamic channel discovery and buffer expansion
+                discovery_complete = self.data_manager.add_or_expand_channel(
+                    channel_num, channel_name
+                )
+                
+                # If discovery just completed, publish status update
+                if discovery_complete:
+                    discovery_status = self.data_manager.get_discovery_status()
+                    self._event_bus.publish_event(
+                        EventType.STATUS_UPDATE,
+                        data={
+                            "type": "channel_discovery_complete",
+                            "total_channels": discovery_status["total_channels"],
+                            "discovered_channels": discovery_status["discovered_channels"],
+                            "channel_info": self.data_manager.get_channel_info_all()
+                        },
+                        source="ZMQService"
+                    )
+                
+                # Process and buffer the data
                 n_arr = np.frombuffer(message[2], dtype=np.float32)
                 self.data_manager.push_data(channel_num, n_arr.reshape(-1, num_samples))
                 
-                # Publish data received event
+                # Publish data received event (less frequent to avoid UI spam)
                 self._event_bus.publish_event(
                     EventType.DATA_RECEIVED,
                     data={
                         "channel_num": channel_num,
                         "channel_name": channel_name,
                         "num_samples": num_samples,
-                        "data_shape": n_arr.shape
+                        "discovery_status": self.data_manager.get_discovery_status()
                     },
                     source="ZMQService"
                 )
                 
-                # Process data immediately with minimal buffering
-                # Send data as soon as we have any samples available (real-time mode)
+                # Process data only after discovery is complete
                 if self.data_manager.has_data_ready(min_samples=1):
                     self._process_buffered_data()
                     

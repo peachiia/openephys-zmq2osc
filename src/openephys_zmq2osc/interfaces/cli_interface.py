@@ -65,6 +65,13 @@ class CLIInterface(BaseInterface):
             "last_update": None
         }
         
+        self._channel_info = {
+            "discovery_mode": True,
+            "total_channels": 0,
+            "discovered_channels": [],
+            "channel_list": []
+        }
+        
         self._error_messages = []
         self._info_messages = []
         
@@ -78,6 +85,7 @@ class CLIInterface(BaseInterface):
         self._event_bus.subscribe(EventType.OSC_CONNECTION_ERROR, self._on_osc_error)
         self._event_bus.subscribe(EventType.DATA_RECEIVED, self._on_data_received)
         self._event_bus.subscribe(EventType.DATA_SENT, self._on_data_sent)
+        self._event_bus.subscribe(EventType.STATUS_UPDATE, self._on_status_update)
     
     def start(self) -> None:
         """Start the CLI interface."""
@@ -110,6 +118,7 @@ class CLIInterface(BaseInterface):
         self._event_bus.unsubscribe(EventType.OSC_CONNECTION_ERROR, self._on_osc_error)
         self._event_bus.unsubscribe(EventType.DATA_RECEIVED, self._on_data_received)
         self._event_bus.unsubscribe(EventType.DATA_SENT, self._on_data_sent)
+        self._event_bus.unsubscribe(EventType.STATUS_UPDATE, self._on_status_update)
         
         if self.live_display:
             self.live_display.stop()
@@ -196,12 +205,27 @@ class CLIInterface(BaseInterface):
         
         grid.add_row(Rule(style="default"), Rule(style="default"))
         
-        # Data info
-        if self._zmq_status["connection_status"] == "online" and self._data_stats["last_update"]:
-            data_info = f"Messages: {self._zmq_status['message_num']}"
-            grid.add_row(data_info, "")
+        # Channel discovery info
+        if self._channel_info["discovery_mode"]:
+            discovery_info = f"Discovering... ({len(self._channel_info['discovered_channels'])} found)"
+            grid.add_row("Channels", f"[val_warning]{discovery_info}[/val_warning]")
+        elif self._channel_info["total_channels"] > 0:
+            channels_info = f"{self._channel_info['total_channels']} channels ready"
+            grid.add_row("Channels", f"[val_success]{channels_info}[/val_success]")
+            
+            # Show channel list (first few channels)
+            if self._channel_info["channel_list"]:
+                channel_names = []
+                for ch in self._channel_info["channel_list"][:6]:  # Show first 6
+                    if ch.get("discovered", False):
+                        channel_names.append(f"[val_success]{ch['label']}[/val_success]")
+                    else:
+                        channel_names.append(f"[dim]{ch['label']}[/dim]")
+                
+                more_text = f" +{len(self._channel_info['channel_list'])-6}" if len(self._channel_info["channel_list"]) > 6 else ""
+                grid.add_row("", f"[dim]{', '.join(channel_names)}{more_text}[/dim]")
         else:
-            grid.add_row("No Data", "")
+            grid.add_row("Channels", "Waiting for data...")
         
         # Error messages
         if self._error_messages:
@@ -223,8 +247,14 @@ class CLIInterface(BaseInterface):
         
         grid.add_row("", Rule(style="grid_rule"))
         
-        # Configuration
-        grid.add_row("Channels", str(self.config.zmq.num_channels))
+        # Configuration - show dynamic channel count
+        if self._channel_info["total_channels"] > 0:
+            channels_text = str(self._channel_info["total_channels"])
+            if self._channel_info["discovery_mode"]:
+                channels_text += " (discovering...)"
+        else:
+            channels_text = "Auto-detect"
+        grid.add_row("Channels", channels_text)
         grid.add_row("Sample Rate", "30000 Hz")  # Default OpenEphys rate
         
         grid.add_row(Rule(style="grid_rule"), Rule(style="grid_rule"))
@@ -315,6 +345,16 @@ class CLIInterface(BaseInterface):
         if event.data:
             self._data_stats["channels_received"] = event.data.get("channel_num", 0)
             self._data_stats["last_update"] = datetime.now()
+            
+            # Update discovery status if in discovery mode
+            discovery_status = event.data.get("discovery_status", {})
+            if discovery_status.get("discovery_mode", False):
+                self._channel_info.update({
+                    "discovery_mode": True,
+                    "discovered_channels": discovery_status.get("discovered_channels", []),
+                    "total_channels": len(discovery_status.get("discovered_channels", []))
+                })
+            
             self._update_layout()
     
     def _on_data_sent(self, event: Event) -> None:
@@ -322,6 +362,21 @@ class CLIInterface(BaseInterface):
         if event.data:
             self._osc_status["messages_sent"] = event.data.get("messages_sent", 0)
             self._data_stats["samples_processed"] = event.data.get("num_samples", 0)
+            self._update_layout()
+
+    def _on_status_update(self, event: Event) -> None:
+        """Handle status update events."""
+        if event.data and event.data.get("type") == "channel_discovery_complete":
+            # Channel discovery completed
+            self._channel_info.update({
+                "discovery_mode": False,
+                "total_channels": event.data.get("total_channels", 0),
+                "discovered_channels": event.data.get("discovered_channels", []),
+                "channel_list": event.data.get("channel_info", [])
+            })
+            
+            # Show completion message
+            self.show_message(f"Channel discovery complete! Found {self._channel_info['total_channels']} channels.", "info")
             self._update_layout()
     
     def update_zmq_status(self, status_data: Dict[str, Any]) -> None:

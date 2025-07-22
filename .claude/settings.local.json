@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(uv init:*)",
+      "Bash(uv add:*)",
+      "Bash(mkdir:*)",
+      "Bash(touch:*)",
+      "Bash(uv run:*)",
+      "Bash(timeout 3 uv run:*)",
+      "Bash(rm:*)",
+      "Bash(python test:*)",
+      "Bash(python:*)",
+      "Bash(./openephys-zmq2osc-darwin-arm64:*)",
+      "Bash(timeout:*)",
+      "Bash(ls:*)",
+      "Bash(cp:*)",
+      "Bash(true)",
+      "Bash(sed:*)",
+      "Bash(mv:*)"
+    ],
+    "deny": []
+  }
+}

@@ -458,6 +458,8 @@ class OSCService:
             self._rate_history = []
             self._data_flow_active = False
             self._last_data_time = 0
+            # Reset drop counter only on reinit
+            self._messages_dropped = 0
 
             # Immediately publish reset status to update UI
             self._event_bus.publish_event(
@@ -467,6 +469,8 @@ class OSCService:
                     "num_samples": 0,
                     "messages_sent": self._messages_sent,
                     "queue_size": 0,
+                    "queue_overflows": self._queue_overflows,
+                    "messages_dropped": self._messages_dropped,
                     "delay_ms": 0.0,
                     "avg_delay_ms": 0.0,
                     "calculated_sample_rate": 0.0,

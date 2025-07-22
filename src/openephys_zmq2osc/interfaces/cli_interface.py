@@ -440,16 +440,43 @@ class CLIInterface(BaseInterface):
                 efficiency = (messages_sent / actual_osc) if actual_osc > 0 else 1.0
                 stats = f"Sent: {messages_sent} | OSC: {actual_osc} | Batch: {batch_size} ({efficiency:.1f}x)"
             else:
-                stats = f"Sent: {messages_sent} | Queue: {queue_size}"
+                # Get queue max size for percentage calculation
+                queue_max_size = 100  # Default, should be read from config
+                if hasattr(self.config, 'performance') and hasattr(self.config.performance, 'osc_queue_max_size'):
+                    queue_max_size = self.config.performance.osc_queue_max_size
+                
+                # Calculate queue percentage and apply color coding
+                queue_percentage = (queue_size / queue_max_size) * 100 if queue_max_size > 0 else 0
+                
+                if queue_percentage >= 80:
+                    queue_color = "val_error"  # Red
+                elif queue_percentage >= 50:
+                    queue_color = "val_warning"  # Yellow
+                else:
+                    queue_color = "white"  # Normal
+                
+                stats = f"Sent: {messages_sent} | Queue: [{queue_color}]{queue_size}[/{queue_color}]"
 
             grid.add_row("Messages", stats)
 
-            # Queue performance metrics
-            overflows = self._osc_status.get("queue_overflows", 0)
-            dropped = self._osc_status.get("messages_dropped", 0)
+            # Drop counter display (always show if drops occurred)
+            #   Overflows:      Number of times the queue reached capacity (overflow events)
+            #   Drops Total:    Total number of individual messages that were actually dropped
+            
+            overflows = self._osc_status.get("queue_overflows", 0)  # Queue overflows called
+            dropped = self._osc_status.get("messages_dropped", 0)   # Messages dropped
+
+            # Drop counter display (always show if drops occurred)
+            if dropped > 0:
+                drop_text = f"Drops! {dropped} batches"
+                grid.add_row("", f"[val_error]{drop_text}[/val_error]")
+            
             if overflows > 0 or dropped > 0:
-                perf_text = f"Overflows: {overflows} | Dropped: {dropped}"
-                grid.add_row("", f"[val_warning]{perf_text}[/val_warning]")
+                perf_text = f"{overflows}"
+                grid.add_row("! onOverflows", f"[val_warning]{perf_text}[/val_warning]")
+                perf_text = f"{dropped}"
+                grid.add_row("! onDropped", f"[val_warning]{perf_text}[/val_warning]")
+
 
             # Delay information
             delay_ms = self._osc_status.get("avg_delay_ms", 0.0)
@@ -577,6 +604,8 @@ class CLIInterface(BaseInterface):
         if event.data:
             self._osc_status["messages_sent"] = event.data.get("messages_sent", 0)
             self._osc_status["queue_size"] = event.data.get("queue_size", 0)
+            self._osc_status["queue_overflows"] = event.data.get("queue_overflows", 0)
+            self._osc_status["messages_dropped"] = event.data.get("messages_dropped", 0)
             self._osc_status["avg_delay_ms"] = event.data.get("avg_delay_ms", 0.0)
             self._osc_status["calculated_sample_rate"] = event.data.get(
                 "calculated_sample_rate", 30000.0

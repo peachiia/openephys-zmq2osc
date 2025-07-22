@@ -86,16 +86,42 @@ Generate optimized configurations for different use cases:
 }
 ```
 
-**Performance optimization:**
+**To enable Sample Mode (direct channel transmission):**
+
+Set `"enable_batching": false` in the performance configuration. This sends data to `/data/sample` with format `[ch0, ch1, ch2, ...]` regardless of batch_size.
+
+**To enable Chunk Mode (batched transmission):**
+
+Set `"enable_batching": true` in the performance configuration. This sends data to `/data/chunk/<size>` with format `[num_channels, flattened_data]` where size is determined by the `batch_size` setting.
+
+**Sample Mode configuration example:**
 
 ```json
 {
+  "osc": {
+    "processing": {
+      "batch_size": 1
+    }
+  },
   "performance": {
-    "osc_batch_size": 50,
-    "osc_queue_max_size": 100,
-    "osc_queue_overflow_strategy": "drop_oldest",
+    "enable_batching": false
+  }
+}
+```
+
+**Chunk Mode configuration example:**
+
+```json
+{
+  "osc": {
+    "processing": {
+      "batch_size": 50
+    }
+  },
+  "performance": {
     "enable_batching": true,
-    "mode": "high_throughput"
+    "osc_queue_max_size": 100,
+    "osc_queue_overflow_strategy": "drop_oldest"
   }
 }
 ```
@@ -111,17 +137,23 @@ Generate optimized configurations for different use cases:
 
 ## OSC Data Formats
 
-### Sample Mode (Default)
+The message format is determined by the `enable_batching` setting in the performance configuration:
+
+### Sample Mode
 
 - **Address:** `/data/sample`
 - **Format:** `[ch0, ch1, ch2, ..., ch31]`
-- **Rate:** Configurable downsampling (1x to 100x reduction)
+- **Configuration:** Set `"enable_batching": false` in performance config
+- **Use Case:** Low-latency, direct channel data transmission
+- **Note:** Sends individual samples regardless of `batch_size` setting
 
-### Batch Mode (High-Throughput)
+### Chunk Mode (Batched)
 
-- **Address:** `/data/chunk`
-- **Format:** `[timestamp, samples, channels, ...data...]`
-- **Rate:** Reduced message count via batching
+- **Address:** `/data/chunk/<chunk_size>`
+- **Format:** `[num_channels, ch0_s1, ch1_s1, ..., ch0_s2, ch1_s2, ...]`
+- **Configuration:** Set `"enable_batching": true` in performance config  
+- **Use Case:** Reduced message count via batching for high-throughput scenarios
+- **Note:** Uses `batch_size` to determine chunk size, sends with channel count prefix
 
 ## Performance Modes
 
@@ -213,7 +245,7 @@ Options:
 
 The terminal interface displays real-time performance metrics:
 
-```
+```text
 Data Flow      ✓ ACTIVE | Channels: 32 | Rate: 30000.0 Hz
 Messages    Sent: 15360 | OSC: 307 | Batch: 50 (50.0x efficiency)
 Queue       Used: 12/100 | Overflows: 0 | Dropped: 0

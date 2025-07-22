@@ -390,14 +390,24 @@ class OSCService:
             )
 
     def _send_batch_osc_message(self, batch: dict) -> None:
-        """Send batch using new OSC format: /data/chunk/<chunk_size> <channel_count> <flattened_data>."""
+        """Send batch using OSC format. Sample mode when enable_batching=False, chunk mode when enable_batching=True."""
         chunk_size = batch["chunk_size"]
         num_channels = batch["num_channels"]
         flattened_data = batch["flattened_data"]
 
-        # Format: /data/chunk/<chunk_size> <channel_count> <flattened_data_by_channel>
-        address = f"{self.base_address}/chunk/{chunk_size}"
-        message_data = [num_channels] + flattened_data
+        # Check enable_batching configuration
+        enable_batching = True  # default
+        if self._config and hasattr(self._config, "performance"):
+            enable_batching = self._config.performance.enable_batching
+
+        if not enable_batching:
+            # Sample mode: /data/sample <ch0_data> <ch1_data> ... (no channel count prefix)
+            address = f"{self.base_address}/sample"
+            message_data = flattened_data
+        else:
+            # Chunk mode: /data/chunk/<chunk_size> <channel_count> <flattened_data_by_channel>
+            address = f"{self.base_address}/chunk/{chunk_size}"
+            message_data = [num_channels] + flattened_data
 
         if self.client is not None:
             self.client.send_message(address, message_data)

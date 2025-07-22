@@ -370,7 +370,6 @@ class CLIInterface(BaseInterface):
 
         grid.add_row("", Rule(style="grid_rule"))
 
-
         # Downsampling information
         downsampling_factor = self._osc_status.get("downsampling_factor", 1)
         downsampling_method = self._osc_status.get("downsampling_method", "average")
@@ -411,15 +410,23 @@ class CLIInterface(BaseInterface):
         downsampling_factor = self._osc_status.get("downsampling_factor", 1)
 
         # Calculate actual output rates after downsampling
-        current_output_rate = input_rate / downsampling_factor if downsampling_factor > 1 else input_rate
-        mean_output_rate = mean_input_rate / downsampling_factor if downsampling_factor > 1 else mean_input_rate
+        current_output_rate = (
+            input_rate / downsampling_factor if downsampling_factor > 1 else input_rate
+        )
+        mean_output_rate = (
+            mean_input_rate / downsampling_factor
+            if downsampling_factor > 1
+            else mean_input_rate
+        )
 
         if data_active and input_rate > 0:
             # Show current output rate on first line
             current_text = f"{current_output_rate:.1f} Hz"
             grid.add_row("Sample Rate", current_text)
             # Show mean output rate on second line if significantly different
-            if abs(current_output_rate - mean_output_rate) > (100 / max(1, downsampling_factor)):
+            if abs(current_output_rate - mean_output_rate) > (
+                100 / max(1, downsampling_factor)
+            ):
                 mean_text = f"{mean_output_rate:.1f} Hz (mean)"
                 grid.add_row("", f"[dim]{mean_text}[/dim]")
         elif not data_active:
@@ -427,11 +434,11 @@ class CLIInterface(BaseInterface):
             grid.add_row("Sample Rate", "[dim]0 Hz *no data[/dim]")
             grid.add_row("", "[dim]0 Hz (mean)[/dim]")
         else:
-            default_output = 30000.0 / downsampling_factor if downsampling_factor > 1 else 30000.0
+            default_output = (
+                30000.0 / downsampling_factor if downsampling_factor > 1 else 30000.0
+            )
             grid.add_row("Sample Rate", f"{default_output:.1f} Hz (default)")
             grid.add_row("", f"[dim]{default_output:.1f} Hz (mean)[/dim]")
-
-
 
         # Calculate and display batch delay (avoid division by zero)
         if mean_input_rate > 0:
@@ -443,8 +450,6 @@ class CLIInterface(BaseInterface):
             grid.add_row("Batch Delay", delay_text)
         else:
             grid.add_row("Batch Delay", "[dim]-- ms[/dim]")
-
-
 
         grid.add_row(Rule(style="grid_rule"), Rule(style="grid_rule"))
 
@@ -478,11 +483,15 @@ class CLIInterface(BaseInterface):
             else:
                 # Get queue max size for percentage calculation
                 queue_max_size = 100  # Default, should be read from config
-                if hasattr(self.config, "performance") and hasattr(self.config.performance, "osc_queue_max_size"):
+                if hasattr(self.config, "performance") and hasattr(
+                    self.config.performance, "osc_queue_max_size"
+                ):
                     queue_max_size = self.config.performance.osc_queue_max_size
 
                 # Calculate queue percentage and apply color coding
-                queue_percentage = (queue_size / queue_max_size) * 100 if queue_max_size > 0 else 0
+                queue_percentage = (
+                    (queue_size / queue_max_size) * 100 if queue_max_size > 0 else 0
+                )
 
                 if queue_percentage >= 80:
                     queue_color = "val_error"  # Red
@@ -499,8 +508,10 @@ class CLIInterface(BaseInterface):
             #   Overflows:      Number of times the queue reached capacity (overflow events)
             #   Drops Total:    Total number of individual messages that were actually dropped
 
-            overflows = self._osc_status.get("queue_overflows", 0)  # Queue overflows called
-            dropped = self._osc_status.get("messages_dropped", 0)   # Messages dropped
+            overflows = self._osc_status.get(
+                "queue_overflows", 0
+            )  # Queue overflows called
+            dropped = self._osc_status.get("messages_dropped", 0)  # Messages dropped
 
             # Drop counter display (always show if drops occurred)
             if dropped > 0:
@@ -512,7 +523,6 @@ class CLIInterface(BaseInterface):
                 grid.add_row("! onOverflows", f"[val_warning]{perf_text}[/val_warning]")
                 perf_text = f"{dropped}"
                 grid.add_row("! onDropped", f"[val_warning]{perf_text}[/val_warning]")
-
 
             # Delay information
             delay_ms = self._osc_status.get("avg_delay_ms", 0.0)

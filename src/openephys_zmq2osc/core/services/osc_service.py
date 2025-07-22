@@ -68,7 +68,7 @@ class OSCService:
             self.data_processor.downsampling_factor,
             self.data_processor.downsampling_method,
             self.data_processor.batch_size,
-            self.data_processor.batch_timeout_ms
+            self.data_processor.batch_timeout_ms,
         )
         if not is_valid:
             print(f"Warning: Invalid processing config: {error_msg}. Using defaults.")
@@ -402,7 +402,6 @@ class OSCService:
         if self.client is not None:
             self.client.send_message(address, message_data)
 
-
     def _send_individual_channels(self, datalist: list[np.ndarray]) -> None:
         """Send each channel as individual OSC messages."""
         for channel_idx, channel_data in enumerate(datalist):
@@ -417,7 +416,6 @@ class OSCService:
             else:
                 if self.client is not None:
                     self.client.send_message(address, channel_data)
-
 
     def send_message(self, address: str, value: float | int | str | list) -> bool:
         """Send a custom OSC message."""
@@ -492,7 +490,7 @@ class OSCService:
                 factor,
                 self.data_processor.downsampling_method,
                 self.data_processor.batch_size,
-                self.data_processor.batch_timeout_ms
+                self.data_processor.batch_timeout_ms,
             )
             if is_valid:
                 self.data_processor.downsampling_factor = factor
@@ -507,7 +505,7 @@ class OSCService:
                 self.data_processor.downsampling_factor,
                 method,
                 self.data_processor.batch_size,
-                self.data_processor.batch_timeout_ms
+                self.data_processor.batch_timeout_ms,
             )
             if is_valid:
                 self.data_processor.downsampling_method = method
@@ -521,7 +519,7 @@ class OSCService:
                 self.data_processor.downsampling_factor,
                 self.data_processor.downsampling_method,
                 batch_size,
-                self.data_processor.batch_timeout_ms
+                self.data_processor.batch_timeout_ms,
             )
             if is_valid:
                 self.data_processor.batch_size = batch_size

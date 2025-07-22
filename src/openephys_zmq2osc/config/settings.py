@@ -20,6 +20,7 @@ class ZMQConfig:
 @dataclass
 class ProcessingConfig:
     """Unified processing configuration for downsampling and batching."""
+
     downsampling_factor: int = 30  # 1 = no downsampling, 30 = 30:1 reduction
     downsampling_method: str = "average"  # "average", "decimate"
     batch_size: int = 1  # Number of samples per OSC message (1 = no batching)
@@ -36,10 +37,6 @@ class OSCConfig:
 
     # Unified processing configuration
     processing: ProcessingConfig = field(default_factory=ProcessingConfig)
-
-    # Legacy configuration (kept for backward compatibility)
-    downsampling_factor: int = 30  # Deprecated: use processing.downsampling_factor
-    downsampling_method: str = "average"  # Deprecated: use processing.downsampling_method
 
 
 @dataclass
@@ -103,7 +100,9 @@ class Config:
             processing_config = ProcessingConfig()
 
         # Create OSC config with processing config
-        osc_config = OSCConfig(**{k: v for k, v in osc_data.items() if k != "processing"})
+        osc_config = OSCConfig(
+            **{k: v for k, v in osc_data.items() if k != "processing"}
+        )
         osc_config.processing = processing_config
 
         return cls(

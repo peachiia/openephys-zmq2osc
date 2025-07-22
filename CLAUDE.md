@@ -188,3 +188,67 @@ Content here.
 - Use proper exception handling in all threads
 - Publish error events for UI notification
 - Implement graceful degradation where possible
+
+## Future Development Tasks
+
+### High-Priority Enhancements
+
+- **Adaptive Downsampling**: Automatically adjust based on data rate and network conditions
+- **Configuration Wizard**: Interactive setup for different use cases (artist, researcher, performance)
+- **OSC Message Size Monitoring**: Track and optimize network bandwidth usage
+- **Automatic Fallback Modes**: Handle network issues gracefully
+
+### Medium-Priority Features
+
+- **Additional Signal Processing**: Bandpass filtering, spike detection, feature extraction
+- **Multiple OpenEphys Sources**: Connect to multiple GUI instances simultaneously
+- **Data Recording**: Save neural data streams to file with timestamps
+- **Compression**: Optional data compression for high-throughput scenarios
+
+### Low-Priority Extensions
+
+- **Web-Based GUI**: Browser interface for remote monitoring and configuration
+- **MIDI Output**: Convert neural signals to MIDI for music applications
+- **Cloud Integration**: Stream data to cloud analytics platforms
+- **Plugin Architecture**: Custom data processing modules
+
+### Performance Optimizations
+
+- **Memory Pool Implementation**: Eliminate allocation overhead in data paths
+- **Event System Batching**: Group event publications to reduce threading overhead
+- **UI Update Throttling**: Adaptive refresh rates based on system load
+- **Zero-Copy Data Paths**: Minimize memory copying in high-throughput scenarios
+
+## Development Notes for Claude Code Agent
+
+### Architecture Quick Reference
+
+- **Event-Driven**: All components communicate via EventBus with typed events
+- **Threading**: Main (UI), ZMQ (data receive), OSC (data send), Event Bus (coordination)
+- **Data Flow**: ZMQ → DataManager → Event → OSC → Network
+- **Configuration**: JSON-based with dataclass validation and hot-reload
+
+### Key Implementation Files
+
+- `src/openephys_zmq2osc/core/services/osc_service.py:377-394` - OSC batching logic
+- `src/openephys_zmq2osc/config/settings.py` - Configuration system with performance presets
+- `src/openephys_zmq2osc/core/services/data_manager.py` - Circular buffer data management
+- `src/openephys_zmq2osc/interfaces/cli_interface.py` - Rich-based terminal interface
+
+### Production Readiness Status
+
+- ✅ **Deprecated Code Removal**: Removed backward compatibility code from settings.py
+- ✅ **Performance Optimizations**: 48x OSC message reduction via batching
+- ✅ **Queue Management**: Overflow strategies with bounded queues
+- ✅ **Configuration System**: Validation and hot-reload capabilities
+- ✅ **Binary Distribution**: Cross-platform PyInstaller builds
+- ✅ **Error Handling**: Graceful degradation throughout
+- ✅ **Performance Monitoring**: Real-time metrics and diagnostics
+- ✅ **Thread Safety**: Event-driven architecture with proper synchronization
+
+### Binary Distribution
+
+- **Build Command**: `uv run python build.py`
+- **Platforms**: Linux (x64), macOS (Intel/ARM), Windows (x64)
+- **Naming**: `openephys-zmq2osc-{platform}-{arch}`
+- **Dependencies**: All bundled in single executable

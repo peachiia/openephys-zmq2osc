@@ -8,13 +8,17 @@ import numpy as np
 class DownsamplingBuffer:
     """Stage 1: Buffer for accumulating samples for downsampling."""
 
-    def __init__(self, num_channels: int, downsampling_factor: int, method: str = "average"):
+    def __init__(
+        self, num_channels: int, downsampling_factor: int, method: str = "average"
+    ):
         self.num_channels = num_channels
         self.downsampling_factor = downsampling_factor
         self.method = method
 
         # Initialize buffer to accumulate samples
-        self.sample_buffer = np.zeros((downsampling_factor, num_channels), dtype=np.float32)
+        self.sample_buffer = np.zeros(
+            (downsampling_factor, num_channels), dtype=np.float32
+        )
         self.buffer_position = 0
         self.samples_accumulated = 0
 
@@ -63,7 +67,8 @@ class DownsamplingBuffer:
             "buffer_position": self.buffer_position,
             "downsampling_factor": self.downsampling_factor,
             "samples_accumulated": self.samples_accumulated,
-            "buffer_fill_percent": (self.buffer_position / self.downsampling_factor) * 100,
+            "buffer_fill_percent": (self.buffer_position / self.downsampling_factor)
+            * 100,
             "method": self.method,
         }
 
@@ -71,7 +76,9 @@ class DownsamplingBuffer:
 class BatchingBuffer:
     """Stage 2: Buffer for accumulating downsampled samples for batching."""
 
-    def __init__(self, num_channels: int, batch_size: int, batch_timeout_ms: float = 10.0):
+    def __init__(
+        self, num_channels: int, batch_size: int, batch_timeout_ms: float = 10.0
+    ):
         self.num_channels = num_channels
         self.batch_size = batch_size
         self.batch_timeout_ms = batch_timeout_ms
@@ -89,15 +96,17 @@ class BatchingBuffer:
 
             # Check if we have enough samples for a batch
             if len(self.sample_buffer) >= self.batch_size:
-                batch_data = self.sample_buffer[:self.batch_size]
-                self.sample_buffer = self.sample_buffer[self.batch_size:]
+                batch_data = self.sample_buffer[: self.batch_size]
+                self.sample_buffer = self.sample_buffer[self.batch_size :]
                 batches_ready.append(self._create_batch_dict(batch_data))
                 self.last_batch_time = time.time()
 
         # Check for timeout-based batch sending
         current_time = time.time()
-        if (self.sample_buffer and
-            (current_time - self.last_batch_time) * 1000 >= self.batch_timeout_ms):
+        if (
+            self.sample_buffer
+            and (current_time - self.last_batch_time) * 1000 >= self.batch_timeout_ms
+        ):
             batch_data = self.sample_buffer.copy()
             self.sample_buffer.clear()
             batches_ready.append(self._create_batch_dict(batch_data))
@@ -118,7 +127,7 @@ class BatchingBuffer:
         return {
             "chunk_size": chunk_size,
             "num_channels": self.num_channels,
-            "flattened_data": flattened_data
+            "flattened_data": flattened_data,
         }
 
     def flush_pending(self) -> dict | None:
@@ -171,22 +180,12 @@ class DataProcessor:
 
         osc_config = self.config.osc
 
-        # Try new unified config structure first
-        if hasattr(osc_config, "processing"):
-            processing = osc_config.processing
-            self.downsampling_factor = getattr(processing, "downsampling_factor", 1)
-            self.downsampling_method = getattr(processing, "downsampling_method", "average")
-            self.batch_size = getattr(processing, "batch_size", 1)
-            self.batch_timeout_ms = getattr(processing, "batch_timeout_ms", 10.0)
-        else:
-            # Fallback to old config structure
-            self.downsampling_factor = getattr(osc_config, "downsampling_factor", 1)
-            self.downsampling_method = getattr(osc_config, "downsampling_method", "average")
-
-            # Get batch size from performance config if available
-            if hasattr(self.config, "performance"):
-                perf = self.config.performance
-                self.batch_size = getattr(perf, "osc_batch_size", 1)
+        # Use unified processing configuration
+        processing = osc_config.processing
+        self.downsampling_factor = processing.downsampling_factor
+        self.downsampling_method = processing.downsampling_method
+        self.batch_size = processing.batch_size
+        self.batch_timeout_ms = processing.batch_timeout_ms
 
     def initialize(self, num_channels: int) -> None:
         """Initialize the processor with channel count."""
@@ -197,7 +196,7 @@ class DataProcessor:
             self.downsampling_buffer = DownsamplingBuffer(
                 num_channels=num_channels,
                 downsampling_factor=self.downsampling_factor,
-                method=self.downsampling_method
+                method=self.downsampling_method,
             )
 
         # Initialize batching stage
@@ -205,16 +204,16 @@ class DataProcessor:
             self.batching_buffer = BatchingBuffer(
                 num_channels=num_channels,
                 batch_size=self.batch_size,
-                batch_timeout_ms=self.batch_timeout_ms
+                batch_timeout_ms=self.batch_timeout_ms,
             )
 
     def process_datalist(self, datalist: list[np.ndarray]) -> list[dict]:
         """
         Process datalist from ZMQ service through the two-stage pipeline.
-        
+
         Args:
             datalist: List of numpy arrays, one per channel (from ZMQ service)
-            
+
         Returns:
             List of batch dictionaries ready for OSC transmission
         """
@@ -239,11 +238,13 @@ class DataProcessor:
             # No batching - create individual batches
             batches = []
             for sample in downsampled_samples:
-                batches.append({
-                    "chunk_size": 1,
-                    "num_channels": self.num_channels,
-                    "flattened_data": [float(x) for x in sample]
-                })
+                batches.append(
+                    {
+                        "chunk_size": 1,
+                        "num_channels": self.num_channels,
+                        "flattened_data": [float(x) for x in sample],
+                    }
+                )
             return batches
 
     def flush_pending(self) -> list[dict]:
@@ -290,10 +291,7 @@ class DataProcessor:
 
 
 def validate_processing_config(
-    downsampling_factor: int,
-    method: str,
-    batch_size: int,
-    batch_timeout_ms: float
+    downsampling_factor: int, method: str, batch_size: int, batch_timeout_ms: float
 ) -> tuple[bool, str]:
     """Validate all processing configuration parameters."""
 
@@ -306,7 +304,10 @@ def validate_processing_config(
 
     valid_methods = ["average", "decimate"]
     if method not in valid_methods:
-        return False, f"Invalid downsampling method '{method}'. Valid options: {valid_methods}"
+        return (
+            False,
+            f"Invalid downsampling method '{method}'. Valid options: {valid_methods}",
+        )
 
     # Validate batching
     if not isinstance(batch_size, int) or batch_size < 1:

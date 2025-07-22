@@ -2,19 +2,26 @@ import numpy as np
 
 
 class OpenEphysEventObject:
-    event_types = {0: 'TIMESTAMP', 1: 'BUFFER_SIZE', 2: 'PARAMETER_CHANGE',
-                   3: 'TTL', 4: 'SPIKE', 5: 'MESSAGE', 6: 'BINARY_MSG'}
+    event_types = {
+        0: "TIMESTAMP",
+        1: "BUFFER_SIZE",
+        2: "PARAMETER_CHANGE",
+        3: "TTL",
+        4: "SPIKE",
+        5: "MESSAGE",
+        6: "BINARY_MSG",
+    }
 
     def __init__(self, _d, _data=None):
         self.type = None
-        self.stream = ''
+        self.stream = ""
         self.sample_num = 0
         self.source_node = 0
         self.event_state = 0
         self.event_line = 0
         self.event_word = 0
         self.numBytes = 0
-        self.data = b''
+        self.data = b""
         self.__dict__.update(_d)
         self.timestamp = None
         # noinspection PyTypeChecker
@@ -31,7 +38,7 @@ class OpenEphysEventObject:
 
             dfb = np.frombuffer(self.data, dtype=np.uint64, offset=2)
             self.event_word = dfb[0]
-        if self.type == 'TIMESTAMP':
+        if self.type == "TIMESTAMP":
             t = np.frombuffer(self.data, dtype=np.int64)
             self.timestamp = t[0]
 
@@ -41,14 +48,13 @@ class OpenEphysEventObject:
 
     def __str__(self):
         ds = self.__dict__.copy()
-        del ds['data']
+        del ds["data"]
         return str(ds)
 
 
 class OpenEphysSpikeObject:
-
     def __init__(self, _d, _data=None):
-        self.stream = ''
+        self.stream = ""
         self.source_node = 0
         self.electrode = 0
         self.sample_num = 0
@@ -62,5 +68,5 @@ class OpenEphysSpikeObject:
 
     def __str__(self):
         ds = self.__dict__.copy()
-        del ds['data']
+        del ds["data"]
         return str(ds)

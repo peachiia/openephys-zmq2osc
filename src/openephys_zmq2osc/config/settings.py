@@ -1,7 +1,7 @@
 import json
-from typing import Dict, Any, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -25,6 +25,14 @@ class OSCConfig:
     send_individual_channels: bool = False
     channel_address_format: str = "/ch{:03d}"
 
+    # Downsampling configuration (for individual sample mode)
+    downsampling_factor: int = 30  # 1 = no downsampling, 30 = 30:1 reduction
+    downsampling_method: str = "average"  # "average", "decimate"
+
+    # Chunk batch mode configuration
+    chunk_format: str = "simple_array"  # "timestamped", "simple_array"
+    chunk_include_metadata: bool = True
+
 
 @dataclass
 class UIConfig:
@@ -42,73 +50,99 @@ class AppConfig:
 
 
 @dataclass
+class PerformanceConfig:
+    """Performance optimization settings for high-throughput scenarios."""
+
+    # OSC batching configuration
+    osc_batch_size: int = 2  # Number of samples per OSC message (1 = no batching)
+    osc_queue_max_size: int = 100  # Maximum queue size before overflow handling
+    osc_queue_overflow_strategy: str = (
+        "drop_oldest"  # "drop_oldest", "drop_newest", "block"
+    )
+
+    # UI and monitoring configuration
+    ui_update_interval_ms: int = 100  # UI update interval during high-throughput
+    metrics_collection_interval_ms: int = 250  # How often to collect detailed metrics
+
+    # Performance mode presets
+    mode: str = "balanced"  # "low_latency", "balanced", "high_throughput"
+
+    # Advanced settings
+    enable_batching: bool = True  # Master switch for batching optimizations
+    adaptive_batching: bool = False  # Automatically adjust batch size based on load
+
+
+@dataclass
 class Config:
     zmq: ZMQConfig
     osc: OSCConfig
     ui: UIConfig
     app: AppConfig
+    performance: PerformanceConfig
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert config to dictionary."""
         return asdict(self)
-    
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Config':
+    def from_dict(cls, data: dict[str, Any]) -> "Config":
         """Create config from dictionary."""
         return cls(
-            zmq=ZMQConfig(**data.get('zmq', {})),
-            osc=OSCConfig(**data.get('osc', {})),
-            ui=UIConfig(**data.get('ui', {})),
-            app=AppConfig(**data.get('app', {}))
+            zmq=ZMQConfig(**data.get("zmq", {})),
+            osc=OSCConfig(**data.get("osc", {})),
+            ui=UIConfig(**data.get("ui", {})),
+            app=AppConfig(**data.get("app", {})),
+            performance=PerformanceConfig(**data.get("performance", {})),
         )
-    
-    def save_to_file(self, filepath: Optional[Path] = None) -> None:
+
+    def save_to_file(self, filepath: Path | None = None) -> None:
         """Save config to JSON file."""
         if filepath is None:
             filepath = Path(self.app.config_file)
-        
+
         try:
-            with open(filepath, 'w') as f:
+            with open(filepath, "w") as f:
                 json.dump(self.to_dict(), f, indent=2)
             print(f"Configuration saved to {filepath}")
         except Exception as e:
             print(f"Error saving configuration: {e}")
-    
+
     @classmethod
-    def load_from_file(cls, filepath: Optional[Path] = None) -> 'Config':
+    def load_from_file(cls, filepath: Path | None = None) -> "Config":
         """Load config from JSON file."""
         if filepath is None:
             filepath = Path("config.json")
-        
+
         if not filepath.exists():
             print(f"Config file {filepath} not found, using defaults")
             return cls.get_default()
-        
+
         try:
-            with open(filepath, 'r') as f:
+            with open(filepath) as f:
                 data = json.load(f)
             return cls.from_dict(data)
         except Exception as e:
             print(f"Error loading configuration: {e}, using defaults")
             return cls.get_default()
-    
+
     @classmethod
-    def get_default(cls) -> 'Config':
+    def get_default(cls) -> "Config":
         """Get default configuration."""
         return cls(
             zmq=ZMQConfig(),
             osc=OSCConfig(),
             ui=UIConfig(),
-            app=AppConfig()
+            app=AppConfig(),
+            performance=PerformanceConfig(),
         )
 
 
 class ConfigManager:
-    def __init__(self, config_path: Optional[Path] = None):
+    def __init__(self, config_path: Path | None = None):
         self.config_path = config_path or Path("config.json")
-        self._config: Optional[Config] = None
-        self._watchers: Dict[str, list] = {}
-    
+        self._config: Config | None = None
+        self._watchers: dict[str, list] = {}
+
     @property
     def config(self) -> Config:
         """Get current configuration."""
@@ -116,50 +150,50 @@ class ConfigManager:
             self.load()
         assert self._config is not None, "Config should be loaded"
         return self._config
-    
+
     def load(self) -> None:
         """Load configuration from file."""
         self._config = Config.load_from_file(self.config_path)
-        self._notify_watchers('config_loaded')
-    
+        self._notify_watchers("config_loaded")
+
     def save(self) -> None:
         """Save current configuration to file."""
         if self._config:
             self._config.save_to_file(self.config_path)
-            self._notify_watchers('config_saved')
-    
+            self._notify_watchers("config_saved")
+
     def update_zmq_config(self, **kwargs) -> None:
         """Update ZMQ configuration."""
         for key, value in kwargs.items():
             if hasattr(self.config.zmq, key):
                 setattr(self.config.zmq, key, value)
-        self._notify_watchers('zmq_config_updated')
-    
+        self._notify_watchers("zmq_config_updated")
+
     def update_osc_config(self, **kwargs) -> None:
         """Update OSC configuration."""
         for key, value in kwargs.items():
             if hasattr(self.config.osc, key):
                 setattr(self.config.osc, key, value)
-        self._notify_watchers('osc_config_updated')
-    
+        self._notify_watchers("osc_config_updated")
+
     def update_ui_config(self, **kwargs) -> None:
         """Update UI configuration."""
         for key, value in kwargs.items():
             if hasattr(self.config.ui, key):
                 setattr(self.config.ui, key, value)
-        self._notify_watchers('ui_config_updated')
-    
+        self._notify_watchers("ui_config_updated")
+
     def add_watcher(self, event: str, callback) -> None:
         """Add a callback to be notified of configuration changes."""
         if event not in self._watchers:
             self._watchers[event] = []
         self._watchers[event].append(callback)
-    
+
     def remove_watcher(self, event: str, callback) -> None:
         """Remove a configuration change callback."""
         if event in self._watchers and callback in self._watchers[event]:
             self._watchers[event].remove(callback)
-    
+
     def _notify_watchers(self, event: str) -> None:
         """Notify all watchers of a configuration event."""
         if event in self._watchers:
@@ -168,7 +202,7 @@ class ConfigManager:
                     callback(self.config)
                 except Exception as e:
                     print(f"Error in config watcher callback: {e}")
-    
+
     def create_sample_config(self) -> None:
         """Create a sample configuration file."""
         config = Config.get_default()
@@ -177,7 +211,7 @@ class ConfigManager:
 
 
 # Global configuration manager instance
-_config_manager: Optional[ConfigManager] = None
+_config_manager: ConfigManager | None = None
 
 
 def get_config_manager() -> ConfigManager:

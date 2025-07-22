@@ -6,15 +6,9 @@ Here's a list of instructions/prompts for a Claude AI agent, derived from the cu
 
 Use these instructions as prompts to guide your work on the project:
 
-- [ ] seems like the datamanager reinit is not working properly (press ctrl+f to reset the channnels count but not worked, also it should automatically reset since the setting is enabled but it is not), fix it.
+- [ ] in "Receiving (5 Secs.)" replace with shorter "Receiving (5.0s)" instead, and replace that number with number from the code or the setting (number must be chabge if the actual setting changed). Also change the default number to 2.0 seconds in the code and the setting.
 
-- [ ] On UI, in zmq side, show the data recirved status (show if data recived timeout is reached
+- [ ] right now the OSC sampling rate and the delay calculation is not reset to zero when data is not reached from zmq so please reset all those number to 0 when re-init function is called.
 
-- [ ] On UI, in zmq side, show the auto reinit setting and status when occured (when the data recieved timeout is reached)
-
-- [ ] the delay show in OSC side is good but when the data is not send from zmq it should show the delay as 0 (with some * or any sign to indicate that the data is not received)
-
-- [ ] the sampling rate on osc side should be shown as 0 when the data is not received from zmq (with some * or any sign to indicate that the data is not received), during the startup it should be shown both current rate and mean rate (mean rate should be calculated from the last 10 seconds)
-
-
+- [ ] Show the estimated ZMQ data sampling delay (Chunk Delay) by the sampling rate divided by the size of the package (one data chunk) so we can see how much delay we have in the data flow. Show the number over the data receiving status in the GUI. The number should be shown in milliseconds and should be updated every second. Don't have to show color coding for the delay, just show the number.
 

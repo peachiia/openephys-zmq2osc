@@ -91,7 +91,9 @@ class CLIInterface(BaseInterface):
             "auto_reinit_enabled": config.zmq.auto_reinit_on_timeout,
             "time_until_timeout": 0.0,
             "data_receiving": False,  # Start as false until data comes in
-            "last_data_time": 0.0
+            "last_data_time": 0.0,
+            "chunk_delay_ms": 0.0,  # ZMQ chunk delay tracking
+            "samples_per_chunk": 0  # Samples per chunk
         }
         
         # Keyboard handling
@@ -258,6 +260,13 @@ class CLIInterface(BaseInterface):
             channels_info = f"{self._channel_info['total_channels']} channels ready"
             grid.add_row("Channels", f"[val_success]{channels_info}[/val_success]")
             
+            # Show chunk delay information
+            samples_per_chunk = self._timeout_status["samples_per_chunk"]
+            chunk_delay = self._timeout_status["chunk_delay_ms"]
+            if samples_per_chunk > 0:
+                chunk_info = f"{samples_per_chunk} s/p ({chunk_delay:.1f} ms)"
+                grid.add_row("", f"[dim]{chunk_info}[/dim]")
+            
             # Show channel list with OSC mapping (first few channels)
             if self._channel_info["channel_list"]:
                 channel_mappings = []
@@ -278,14 +287,15 @@ class CLIInterface(BaseInterface):
                 grid.add_row("OSC Mapping", f"[dim]{', '.join(channel_mappings)}{more_text}[/dim]")
         else:
             grid.add_row("Channels", "Waiting for data...")
+            grid.add_row("", "[dim]Chunk 0(0.0 ms)[/dim]")
         
         # Data timeout and auto-reinit status
         grid.add_row("", "")
         
         # Show data receiving status and timeout info
         if self._timeout_status["data_receiving"]:
-            timeout_seconds = int(self._timeout_status['timeout_seconds'])
-            grid.add_row("Data Status", f"[val_success]Receiving ({timeout_seconds} Secs.)[/val_success]")
+            timeout_seconds = self._timeout_status['timeout_seconds']
+            grid.add_row("Data Status", f"[val_success]Receiving ({timeout_seconds:.1f}s)[/val_success]")
         else:
             if self._timeout_status["timeout_triggered"]:
                 grid.add_row("Data Status", "[val_error]Timeout reached[/val_error]")
@@ -465,6 +475,12 @@ class CLIInterface(BaseInterface):
             self._timeout_status["timeout_triggered"] = False
             self._timeout_status["last_data_time"] = time.time()
             
+            # Update chunk delay and samples per chunk if available
+            if "chunk_delay_ms" in event.data:
+                self._timeout_status["chunk_delay_ms"] = event.data["chunk_delay_ms"]
+            if "num_samples" in event.data:
+                self._timeout_status["samples_per_chunk"] = event.data["num_samples"]
+            
             # Update discovery status if in discovery mode
             discovery_status = event.data.get("discovery_status", {})
             if discovery_status.get("discovery_mode", False):
@@ -528,6 +544,8 @@ class CLIInterface(BaseInterface):
             timeout_sec = event.data.get("timeout_seconds", 5)
             self._timeout_status["manual_reinit_available"] = False
             self._timeout_status["timeout_triggered"] = False
+            self._timeout_status["chunk_delay_ms"] = 0.0  # Reset chunk delay
+            self._timeout_status["samples_per_chunk"] = 0  # Reset samples per chunk
             
             self.show_message(f"Auto reinit: {prev_channels} → 1 channel (timeout: {timeout_sec}s)", "info")
             
@@ -536,6 +554,8 @@ class CLIInterface(BaseInterface):
             prev_channels = event.data.get("previous_channels", 0)
             self._timeout_status["manual_reinit_available"] = False
             self._timeout_status["timeout_triggered"] = False
+            self._timeout_status["chunk_delay_ms"] = 0.0  # Reset chunk delay
+            self._timeout_status["samples_per_chunk"] = 0  # Reset samples per chunk
             
             self.show_message(f"Manual reinit: {prev_channels} → 1 channel", "info")
             

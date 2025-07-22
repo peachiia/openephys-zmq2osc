@@ -57,6 +57,8 @@ class OSCService:
             
             # Subscribe to data events from ZMQ service
             self._event_bus.subscribe(EventType.DATA_PROCESSED, self._on_data_received)
+            # Subscribe to status updates for reinit events
+            self._event_bus.subscribe(EventType.STATUS_UPDATE, self._on_status_update)
             
             # Start processing thread
             self._thread = threading.Thread(target=self._run, daemon=True)
@@ -132,6 +134,7 @@ class OSCService:
         # Unsubscribe from events
         try:
             self._event_bus.unsubscribe(EventType.DATA_PROCESSED, self._on_data_received)
+            self._event_bus.unsubscribe(EventType.STATUS_UPDATE, self._on_status_update)
         except Exception as e:
             print(f"Error unsubscribing from events: {e}")
         
@@ -194,7 +197,7 @@ class OSCService:
                 self._update_sampling_rate()
             
             with self._queue_lock:
-                self._data_queue.append((receive_time, datalist))
+                self._data_queue.append((receive_time, datalist, event.data.get("chunk_delay_ms", 0.0)))
     
     def _run(self) -> None:
         """Main processing loop."""
@@ -213,7 +216,7 @@ class OSCService:
                     data_to_process = self._data_queue.pop(0)
             
             if data_to_process:
-                receive_time, datalist = data_to_process
+                receive_time, datalist, chunk_delay = data_to_process
                 send_time = time.time()
                 
                 # Calculate and track delay
@@ -222,12 +225,12 @@ class OSCService:
                 if len(self._recent_delays) > self._max_delay_history:
                     self._recent_delays.pop(0)
                 
-                self._send_data(datalist, delay_ms)
+                self._send_data(datalist, delay_ms, chunk_delay)
             else:
                 # Minimal sleep for high-performance real-time processing
                 time.sleep(0.0001)  # 0.1ms instead of 1ms for lower latency
     
-    def _send_data(self, datalist: List[np.ndarray], delay_ms: float = 0.0) -> None:
+    def _send_data(self, datalist: List[np.ndarray], delay_ms: float = 0.0, chunk_delay: float = 0.0) -> None:
         """Send data via OSC."""
         if not self.client or not self._connection_active:
             return
@@ -262,7 +265,8 @@ class OSCService:
                     "avg_delay_ms": display_delay,
                     "calculated_sample_rate": display_rate,
                     "mean_sample_rate": display_mean_rate,
-                    "data_flow_active": self._data_flow_active
+                    "data_flow_active": self._data_flow_active,
+                    "chunk_delay_ms": chunk_delay
                 },
                 source="OSCService"
             )
@@ -320,6 +324,23 @@ class OSCService:
         except Exception as e:
             print(f"Error sending custom OSC message: {e}")
             return False
+    
+    def _on_status_update(self, event) -> None:
+        """Handle status update events for reinit."""
+        if not event.data:
+            return
+            
+        event_type = event.data.get("type")
+        
+        if event_type in ["auto_reinit_completed", "manual_reinit_completed"]:
+            # Reset sampling rate and delay tracking when reinit occurs
+            self._calculated_sample_rate = 0.0
+            self._mean_sample_rate = 0.0
+            self._recent_delays = []
+            self._sample_timestamps = []
+            self._rate_history = []
+            self._data_flow_active = False
+            print("OSC metrics reset due to data reinit")
     
     def configure(self, **kwargs) -> None:
         """Configure OSC service parameters."""

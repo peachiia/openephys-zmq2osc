@@ -65,8 +65,14 @@ class ZMQService:
         self._thread: Optional[threading.Thread] = None
         self._event_bus = get_event_bus()
         
-        # Subscribe to manual reinit events
+        # Chunk delay tracking
+        self._last_chunk_samples = 0
+        self._estimated_sample_rate = 30000.0  # Default fallback
+        self._chunk_delay_ms = 0.0
+        
+        # Subscribe to manual reinit events and data sent events for sample rate updates
         self._event_bus.subscribe(EventType.STATUS_UPDATE, self._on_status_update)
+        self._event_bus.subscribe(EventType.DATA_SENT, self._on_data_sent)
         
     def start(self) -> None:
         """Start the ZMQ service in a separate thread."""
@@ -100,6 +106,7 @@ class ZMQService:
         # Unsubscribe from events
         try:
             self._event_bus.unsubscribe(EventType.STATUS_UPDATE, self._on_status_update)
+            self._event_bus.unsubscribe(EventType.DATA_SENT, self._on_data_sent)
         except Exception as e:
             print(f"Error unsubscribing from events: {e}")
             
@@ -239,6 +246,13 @@ class ZMQService:
             # Always allow manual reinit when requested by user
             self.manual_reinit_data_manager()
     
+    def _on_data_sent(self, event) -> None:
+        """Handle data sent events to update estimated sample rate."""
+        if event.data and "calculated_sample_rate" in event.data:
+            sample_rate = event.data.get("calculated_sample_rate", 30000.0)
+            if sample_rate > 0:
+                self._estimated_sample_rate = sample_rate
+    
     def _reconnect(self) -> None:
         """Reconnect to OpenEphys server."""
         try:
@@ -317,6 +331,11 @@ class ZMQService:
                 n_arr = np.frombuffer(message[2], dtype=np.float32)
                 self.data_manager.push_data(channel_num, n_arr.reshape(-1, num_samples))
                 
+                # Calculate chunk delay (how much delay one data chunk represents)
+                self._last_chunk_samples = num_samples
+                if self._estimated_sample_rate > 0:
+                    self._chunk_delay_ms = (num_samples / self._estimated_sample_rate) * 1000.0
+                
                 # Publish data received event (less frequent to avoid UI spam)
                 self._event_bus.publish_event(
                     EventType.DATA_RECEIVED,
@@ -324,7 +343,8 @@ class ZMQService:
                         "channel_num": channel_num,
                         "channel_name": channel_name,
                         "num_samples": num_samples,
-                        "discovery_status": self.data_manager.get_discovery_status()
+                        "discovery_status": self.data_manager.get_discovery_status(),
+                        "chunk_delay_ms": self._chunk_delay_ms
                     },
                     source="ZMQService"
                 )
@@ -348,7 +368,8 @@ class ZMQService:
                 data={
                     "datalist": datalist,
                     "num_samples": samples_to_pop,
-                    "num_channels": len(datalist)
+                    "num_channels": len(datalist),
+                    "chunk_delay_ms": self._chunk_delay_ms
                 },
                 source="ZMQService"
             )

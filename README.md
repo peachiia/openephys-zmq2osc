@@ -90,9 +90,9 @@ Generate optimized configurations for different use cases:
 
 Set `"enable_batching": false` in the performance configuration. This sends data to `/data/sample` with format `[ch0, ch1, ch2, ...]` regardless of batch_size.
 
-**To enable Chunk Mode (batched transmission):**
+**To enable Batch Mode (batched transmission):**
 
-Set `"enable_batching": true` in the performance configuration. This sends data to `/data/chunk/<size>` with format `[num_channels, flattened_data]` where size is determined by the `batch_size` setting.
+Set `"enable_batching": true` in the performance configuration. This sends data to `/data/batch/<size>` with format `[num_channels, flattened_data]` where size is determined by the `batch_size` setting.
 
 **Sample Mode configuration example:**
 
@@ -109,7 +109,7 @@ Set `"enable_batching": true` in the performance configuration. This sends data 
 }
 ```
 
-**Chunk Mode configuration example:**
+**Batch Mode configuration example:**
 
 ```json
 {
@@ -147,13 +147,13 @@ The message format is determined by the `enable_batching` setting in the perform
 - **Use Case:** Low-latency, direct channel data transmission
 - **Note:** Sends individual samples regardless of `batch_size` setting
 
-### Chunk Mode (Batched)
+### Batch Mode (Batched)
 
-- **Address:** `/data/chunk/<chunk_size>`
+- **Address:** `/data/batch/<batch_size>`
 - **Format:** `[num_channels, ch0_s1, ch1_s1, ..., ch0_s2, ch1_s2, ...]`
 - **Configuration:** Set `"enable_batching": true` in performance config  
 - **Use Case:** Reduced message count via batching for high-throughput scenarios
-- **Note:** Uses `batch_size` to determine chunk size, sends with channel count prefix
+- **Note:** Uses `batch_size` to determine batch size, sends with channel count prefix
 
 ## Performance Modes
 

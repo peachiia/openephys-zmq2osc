@@ -405,8 +405,8 @@ class OSCService:
             address = f"{self.base_address}/sample"
             message_data = flattened_data
         else:
-            # Chunk mode: /data/chunk/<chunk_size> <channel_count> <flattened_data_by_channel>
-            address = f"{self.base_address}/chunk/{chunk_size}"
+            # Batch mode: /data/batch/<chunk_size> <channel_count> <flattened_data_by_channel>
+            address = f"{self.base_address}/batch/{chunk_size}"
             message_data = [num_channels] + flattened_data
 
         if self.client is not None:

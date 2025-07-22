@@ -93,10 +93,10 @@ class Config:
         """Create config from dictionary, handling both full and minimal formats."""
         # Handle ZMQ config
         zmq_data = data.get("zmq", {})
-        
+
         # Handle performance data that might be split between performance section and ZMQ section
         performance_data = data.get("performance", {})
-        
+
         # Map minimal config ZMQ timeout fields to full config fields
         if "zmq_not_responding_timeout" in performance_data:
             zmq_data["not_responding_timeout"] = performance_data["zmq_not_responding_timeout"]
@@ -104,7 +104,7 @@ class Config:
             zmq_data["data_timeout_seconds"] = performance_data["zmq_data_timeout_seconds"]
         if "zmq_auto_reinit_on_timeout" in performance_data:
             zmq_data["auto_reinit_on_timeout"] = performance_data["zmq_auto_reinit_on_timeout"]
-        
+
         # Handle OSC config with nested processing config
         osc_data = data.get("osc", {})
         if "processing" in osc_data:
@@ -124,7 +124,7 @@ class Config:
 
         # Clean up performance data by removing ZMQ-specific fields
         clean_performance_data = {
-            k: v for k, v in performance_data.items() 
+            k: v for k, v in performance_data.items()
             if not k.startswith("zmq_")
         }
 
@@ -253,7 +253,7 @@ class ConfigManager:
         else:
             config.save_to_file(self.config_path)
             print(f"Full configuration created at {self.config_path}")
-    
+
     def _save_minimal_config(self, config: Config, filepath: Path) -> None:
         """Save a minimal configuration format."""
         minimal_data = {
@@ -281,7 +281,7 @@ class ConfigManager:
                 "osc_queue_overflow_strategy": config.performance.osc_queue_overflow_strategy
             }
         }
-        
+
         try:
             with open(filepath, "w") as f:
                 json.dump(minimal_data, f, indent=2)

@@ -1,6 +1,6 @@
 # OpenEphys ZMQ to OSC Bridge
 
-A high-performance, real-time data bridge for neuroscience applications. Receives neural data streams from OpenEphys GUI via ZMQ and forwards them to creative applications using OSC protocol. 
+A high-performance, real-time data bridge for neuroscience applications. Receives neural data streams from OpenEphys GUI via ZMQ and forwards them to creative applications using OSC protocol.
 
 For the kind of creative who sees no difference between patching signals in TouchDesigner and wiring electrodes into the brain.
 
@@ -40,97 +40,49 @@ The config.json file is automatically generated in the current directory. Any ch
 ### Advanced Usage
 
 ```bash
-# Create default configuration file for customization
+# Create minimal configuration file (production use)
 ./openephys-zmq2osc --create-config
 
+# Create full configuration file with all options (development)
+./openephys-zmq2osc --create-config-dev
+
 # Run with custom configuration
-./openephys-zmq2osc --config config.json
+./openephys-zmq2osc --config my_config.json
 
-# Run with high-throughput preset
-./openephys-zmq2osc --config config_high_throughput.json
-```
-
-### Quick Setup Presets
-
-Generate optimized configurations for different use cases:
-
-```bash
-# High-throughput mode (32+ channels)
-./openephys-zmq2osc --create-config --preset high_throughput
-
-# Low-latency mode (1-16 channels)  
-./openephys-zmq2osc --create-config --preset low_latency
+# Override specific settings via command line
+./openephys-zmq2osc --zmq-host 192.168.1.100 --osc-port 8000
 ```
 
 ### Manual Configuration
 
-**Basic connection settings:**
+**Basic configuration (config.json):**
 
 ```json
 {
   "zmq": {
     "host": "localhost",
     "data_port": 5556,
-    "auto_reinit_on_timeout": true
+    "app_uuid": "1618"
   },
   "osc": {
-    "host": "127.0.0.1", 
+    "host": "127.0.0.1",
     "port": 10000,
     "base_address": "/data",
     "processing": {
       "downsampling_factor": 30,
       "downsampling_method": "average",
-      "batch_size": 1
-    }
-  }
-}
-```
-
-**To enable Sample Mode (direct channel transmission):**
-
-Set `"enable_batching": true` in the performance configuration. This sends data to `/data/sample` with format `[ch0, ch1, ch2, ...]`. In sample mode, `batch_size` is **automatically overridden to 1** to ensure one sample per channel per message.
-
-**To enable Batch Mode (batched transmission):**
-
-Set `"enable_batching": false` in the performance configuration. This sends data to `/data/batch/<size>` with format `[num_channels, flattened_data]` where size is determined by the `batch_size` setting.
-
-**Important Batching Behavior:**
-
-- When `enable_batching=true`, the system **automatically forces** `batch_size=1` regardless of configuration
-- When `enable_batching=false` but `batch_size != 1`, the UI shows **OVERRIDDEN** to indicate the system is overriding your batch_size setting
-- Sample mode (`enable_batching=true`) MUST always have exactly one sample per channel to maintain /data/sample format compatibility
-
-**Sample Mode configuration example:**
-
-```json
-{
-  "osc": {
-    "processing": {
+      "enable_batching": true,
       "batch_size": 1
     }
   },
   "performance": {
-    "enable_batching": true
-  }
-}
-```
-
-**Batch Mode configuration example:**
-
-```json
-{
-  "osc": {
-    "processing": {
-      "batch_size": 50
-    }
-  },
-  "performance": {
-    "enable_batching": false,
     "osc_queue_max_size": 100,
     "osc_queue_overflow_strategy": "drop_oldest"
   }
 }
 ```
+
+The minimal config contains only essential settings. Use `--create-config-dev` for the full configuration with all available options.
 
 ## OpenEphys Setup
 
@@ -143,63 +95,101 @@ Set `"enable_batching": false` in the performance configuration. This sends data
 
 ## OSC Data Formats
 
-The message format is determined by the `enable_batching` setting in the performance configuration:
+The message format is determined by the `enable_batching` setting in the performance configuration (see below in section [**Performance Tuning Examples**](#performance-tuning-examples). The bridge supports two modes: **Sample Mode** and **Batch Mode**.
 
 ### Sample Mode
 
 - **Address:** `/data/sample`
 - **Format:** `[ch0, ch1, ch2, ..., ch31]`
-- **Configuration:** Set `"enable_batching": true` in performance config
+- **Configuration:** Set `"enable_batching": false` in performance config
 - **Use Case:** Low-latency, direct channel data transmission
 - **Note:** Automatically forces `batch_size=1` to ensure one sample per channel per message
 
 ### Batch Mode (Batched)
 
-- **Address:** `/data/batch/<batch_size>`
-- **Format:** `[num_channels, ch0_s1, ch1_s1, ..., ch0_s2, ch1_s2, ...]`
-- **Configuration:** Set `"enable_batching": false` in performance config  
+- **Address:** `/data/batch`
+- **Format:** `[batch_size, num_channels, ch1_s1, ch1_s2, ..., ch1_sN, ch2_s1, ...]`
+- **Configuration:** Set `"enable_batching": true` in performance config  
 - **Use Case:** Reduced message count via batching for high-throughput scenarios
 - **Note:** Uses `batch_size` to determine batch size, sends with channel count prefix
 
-## Performance Modes
+## Performance Tuning Examples
 
-### High-Throughput (32+ Channels)
-
-```json
-{
-  "osc": {
-    "processing": {
-      "downsampling_factor": 30,
-      "batch_size": 50
-    }
-  },
-  "performance": {
-    "mode": "high_throughput",
-    "enable_batching": false
-  }
-}
-```
-
-**Results:** 48x reduction in OSC messages, stable with 64+ channels
-
-### Low-Latency (1-16 Channels)
+For simple data streaming, we would recommend using sample mode with `"enable_batching": false`. This option allows the bridge to send each sample as an individual OSC message, which is suitable for low-latency applications with few channels.
 
 ```json
 {
   "osc": {
     "processing": {
       "downsampling_factor": 1,
-      "batch_size": 1
+      "enable_batching": false
     }
-  },
-  "performance": {
-    "mode": "low_latency",
-    "enable_batching": true
   }
 }
 ```
 
-**Results:** Minimal latency, individual sample processing
+However, in some cases, especially when dealing with high-throughput scenarios (many channels, high sample rates), you may want to reduce the data rate to avoid overwhelming the network. In such cases, you can use either `downsampling_factor` or `enable batching.`
+
+### Downsampling
+
+To reduce the data rate, you can set a `downsampling_factor`. This will average the samples over the specified factor, effectively reducing the number of messages sent:
+
+```json
+{
+  "osc": {
+    "processing": {
+      "downsampling_factor": 30, 
+    }
+  }
+}
+```
+
+For example, a `downsampling_factor` of 30 means that every 30 samples will be averaged into one message, reducing the data rate by a factor of 30.
+
+### Batching
+
+For high-throughput scenarios, enabling batching with `"enable_batching": true` is recommended. This allows the bridge to send data in batches, reducing the number of OSC messages sent over the network. **However, this option will redirect the data to a different OSC address, so you will need to adjust your receiving application accordingly.**
+
+```json
+{
+  "osc": {
+    "processing": {
+      "enable_batching": true,
+      "batch_size": 10
+    }
+  }
+}
+```
+
+When batching is enabled, the bridge will send messages in batches of the specified size (e.g., 10 samples per message). This can significantly reduce the number of OSC messages sent, improving performance in high-throughput scenarios.
+
+the data will be sent to the `/data/batch/<batch_size>` address instead of `/data/sample`.
+
+for example, if you set `"batch_size": 10` and number of channels is 32, the OSC messages will be sent to:
+
+```text
+/data/batch/10 32 0.01 0.02 0.03 ... 0.10 1.00 1.01 1.02 ... 1.10
+```
+
+when 0.01 mean `sample 1` of `channel 0`, 0.02 mean `sample 2` of `channel 0`, and so on.
+
+### Combining Downsampling and Batching
+
+You can also combine both downsampling and batching for optimal performance. This allows you to reduce the data rate while still sending data in batches:
+
+```json
+{
+  "osc": {
+    "processing": {
+      "downsampling_factor": 30,
+      "enable_batching": true,
+      "batch_size": 10
+    }
+  }
+}
+```
+
+In this case, the bridge will downsample the data by a factor of 30 and then send it in batches of 10 samples. The OSC messages will be sent to the `/data/batch/` address.
 
 ## Creative Application Examples
 
@@ -236,47 +226,96 @@ The message format is determined by the `enable_batching` setting in the perform
 openephys-zmq2osc [OPTIONS]
 
 Options:
-  --config FILE           Configuration file (default: config.json)
-  --create-config        Generate sample configuration
-  --preset MODE          Preset: low_latency, balanced, high_throughput
-  --zmq-host HOST        OpenEphys server IP
-  --zmq-port PORT        OpenEphys ZMQ port
-  --osc-host HOST        OSC destination IP  
-  --osc-port PORT        OSC destination port
-  --version, -v          Show version
-  --help, -h             Show help
-```
-
-## Performance Monitoring
-
-The terminal interface displays real-time performance metrics:
-
-```text
-Data Flow      ✓ ACTIVE | Channels: 32 | Rate: 30000.0 Hz
-Messages    Sent: 15360 | OSC: 307 | Batch: 50 (50.0x efficiency)
-Queue       Used: 12/100 | Overflows: 0 | Dropped: 0
-Processing     Downsampling: 30:1 | Method: Average
+  --config FILE, -c FILE  Configuration file (default: config.json)
+  --create-config         Generate minimal sample configuration
+  --create-config-dev     Generate full developer configuration
+  --zmq-host HOST         Override ZMQ host address
+  --zmq-port PORT         Override ZMQ data port
+  --osc-host HOST         Override OSC host address
+  --osc-port PORT         Override OSC port
+  --version, -v           Show version
+  --help, -h              Show help
 ```
 
 ## Troubleshooting
 
-### High CPU Usage
+Having issues? Don't panic! Here are common problems and their solutions, explained for both technical and non-technical users.
 
-- Enable batch mode: `"enable_batching": false`
-- Increase batch size: `"batch_size": 50` (in osc.processing section)
-- Reduce UI refresh rate: `"refresh_rate": 5`
+### The App is Running Slowly or Using Too Much Computer Resources
 
-### Data Dropouts
+**What's happening:** The bridge is working too hard processing data.
 
-- Increase queue size: `"osc_queue_max_size": 200`
-- Use `drop_oldest` overflow strategy
-- Check network bandwidth
+**Simple fixes:**
 
-### Connection Issues
+- **Close other programs** - Free up memory by closing unnecessary applications
+- **Restart both OpenEphys and the bridge** - Sometimes a fresh start fixes everything
+- **Use a wired ethernet connection** instead of WiFi for better performance
 
-- Verify OpenEphys ZMQ plugin configuration
-- Check firewall settings
-- Try IP `127.0.0.1` instead of `localhost`
+**Technical adjustments (edit your config.json file):**
+
+- Increase batch size: Set `"batch_size": 50` in the osc.processing section  
+
+### Data is Missing or Choppy in Your Creative App
+
+**What's happening:** The bridge can't keep up with the data flow, so some gets dropped.
+
+**Simple fixes:**
+
+- **Check your network connection** - Use ethernet instead of WiFi if possible
+- **Move closer to your router** if using WiFi
+- **Restart everything** - OpenEphys, the bridge, and your receiving application
+- **Reduce the number of channels** in OpenEphys if you don't need them all
+
+**Technical adjustments (edit your config.json file):**
+
+- Enable downsampling: Set `"downsampling_factor": 10` or more to reduce data rate
+- Increase queue size: Set `"osc_queue_max_size": 200` in the performance section
+
+### Can't Connect to OpenEphys
+
+**What's happening:** The bridge can't find or talk to OpenEphys GUI.
+
+**Step-by-step fixes:**
+
+1. **Make sure OpenEphys is actually recording** - Look for the start acquisition button (play button) to be active, clock should be running.
+2. **Check the ZMQ plugin is added** - In OpenEphys, make sure "ZMQ Interface" appears in your signal chain.
+3. **Verify the ZMQ Data Channel selected** - In OpenEphys, ensure the ZMQ Data Channel is selected by clicking on `Channel` box, it should show something like `32/32` which means all channels are selected (or the number of channels you have).
+4. **Verify port numbers match** - The default should be 5556, check both OpenEphys and your config.json
+5. **Try different IP addresses** - Change from `"localhost"` to `"127.0.0.1"` in config.json
+6. **Check your firewall** - Some security software blocks these connections
+7. **Run both programs as administrator/root** - This can solve permission issues
+
+**For network connections (different computers):**
+
+- Make sure both computers are on the same network
+- Use the actual IP address instead of "localhost" (like `"192.168.1.100"`)
+- Check that firewalls on both computers allow the connection
+
+### Your Creative App (TouchDesigner/Max/etc.) Isn't Receiving Data
+
+**What's happening:** The OSC messages aren't reaching your application.
+
+**Technical checks:**
+
+1. **Check the port number** - Make sure your app is listening on port 10000 (or whatever you set)
+2. **Check the OSC address** - Look for `/data/sample` or `/data/batch` depending on your settings
+3. **Test with a simple OSC monitor app** first to confirm data is being sent
+4. **Make sure your creative app is actually running and set up correctly**
+
+### Still Having Problems?
+
+**Before asking for help, try this:**
+
+1. **Restart everything** in this order: OpenEphys → Bridge → Your creative app
+2. **Generate a fresh config** with `./openephys-zmq2osc --create-config`
+3. **Test with minimal settings** - Use the default config first, then customize
+4. **Test with a simple OSC monitor app of your choice** to see if data is being sent correctly
+
+**Getting help:**
+
+- Post an issue on [GitHub](https://github.com/peachiia/openephys-zmq2osc/issues)
+- Include your config.json file and any error messages
+- Mention your operating system and what creative software you're using
 
 ## Development
 
@@ -295,8 +334,6 @@ uv run pytest
 # Build binary
 uv run python build.py
 ```
-
-See `CLAUDE.md` for detailed development guidelines and architecture documentation.
 
 ## License
 

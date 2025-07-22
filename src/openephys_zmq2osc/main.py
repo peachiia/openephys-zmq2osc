@@ -178,7 +178,7 @@ Examples:
     )
     parser.add_argument(
         "--create-config-dev",
-        action="store_true", 
+        action="store_true",
         help="Create a full developer configuration file with all options and exit",
     )
 
@@ -199,7 +199,7 @@ Examples:
         config_path = args.config or Path("config.json")
         create_config_file(config_path, minimal=True)
         return
-    
+
     if args.create_config_dev:
         config_path = args.config or Path("config-dev.json")
         create_config_file(config_path, minimal=False)

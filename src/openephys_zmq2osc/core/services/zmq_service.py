@@ -426,7 +426,7 @@ class ZMQService:
         """Handle heartbeat reply from server."""
         try:
             if self.heartbeat_socket:
-                message = self.heartbeat_socket.recv()
+                self.heartbeat_socket.recv()  # Read heartbeat reply (don't need to store)
                 self.connection_status = ConnectionStatus.ONLINE
                 self._publish_status_update()
 

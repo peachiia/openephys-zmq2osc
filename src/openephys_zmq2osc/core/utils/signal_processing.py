@@ -186,10 +186,10 @@ class DataProcessor:
         self.downsampling_method = processing.downsampling_method
         self.batch_size = processing.batch_size
         self.batch_timeout_ms = processing.batch_timeout_ms
-        
+
         # Override batch_size to 1 if enable_batching is False (sample mode)
-        if (hasattr(self.config, "performance") and 
-            not self.config.performance.enable_batching and 
+        if (hasattr(self.config, "performance") and
+            not self.config.performance.enable_batching and
             self.batch_size != 1):
             self.batch_size = 1
 
@@ -322,7 +322,7 @@ def validate_processing_config(
     if batch_size > 1000:
         return False, "Batch size too large (max 1000)"
 
-    if not isinstance(batch_timeout_ms, (int, float)) or batch_timeout_ms <= 0:
+    if not isinstance(batch_timeout_ms, int | float) or batch_timeout_ms <= 0:
         return False, "Batch timeout must be a positive number"
 
     return True, ""

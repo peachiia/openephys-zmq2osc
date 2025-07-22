@@ -393,12 +393,12 @@ class CLIInterface(BaseInterface):
         if enable_batching:
             batching_text = f"ENABLED ({batch_size})"
         else:
-            batching_text = f"DISABLED"
-            
+            batching_text = "DISABLED"
+
         # Show override warning when enable_batching=False but original_batch_size != 1
         if not enable_batching and original_batch_size != 1:
             batching_text += f" [val_warning]OVR[/val_warning] ({original_batch_size}->1)"
-        
+
         grid.add_row("Batching", batching_text)
 
         grid.add_row("", Rule(style="grid_rule"))
@@ -583,8 +583,8 @@ class CLIInterface(BaseInterface):
 
         grid.add_row(
             left_controls,
-            info_text, 
-            f"[dim]@peachiia[/dim]",
+            info_text,
+            "[dim]@peachiia[/dim]",
         )
 
 

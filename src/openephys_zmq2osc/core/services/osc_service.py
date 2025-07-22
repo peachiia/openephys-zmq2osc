@@ -88,6 +88,21 @@ class OSCService:
                 source="OSCService",
             )
 
+            # Publish initial OSC status with batch size info
+            self._event_bus.publish_event(
+                EventType.OSC_CONNECTION_STATUS,
+                data={
+                    "running": True,
+                    "connected": True,
+                    "host": self.host,
+                    "port": self.port,
+                    "batch_size": self._batch_size,
+                    "messages_sent": 0,
+                    "queue_size": 0,
+                },
+                source="OSCService",
+            )
+
             print(f"OSC service started - sending to {self.host}:{self.port}")
 
         except Exception as e:

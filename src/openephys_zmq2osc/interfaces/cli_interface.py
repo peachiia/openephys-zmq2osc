@@ -392,7 +392,12 @@ class CLIInterface(BaseInterface):
         batch_size = self._osc_status.get("batch_size", 1)
         mean_rate = self._osc_status.get("mean_sample_rate", 30000.0)
 
-        grid.add_row("Batch Size", str(batch_size))
+        # Show batching status with enabled/disabled indication
+        if batch_size > 1:
+            batching_text = f"ENABLED ({batch_size})"
+        else:
+            batching_text = f"DISABLED ({batch_size})"
+        grid.add_row("Batching", batching_text)
 
         # Calculate and display batch delay (avoid division by zero)
         if mean_rate > 0:

@@ -107,8 +107,8 @@ Messages    Sent: 1000 | OSC: 1000 | Batch: 1 (1.0x)
 ## Performance Expectations
 
 ### For 32+ Channel Scenarios:
-- **Before Phase 1**: 15,360 OSC messages per chunk → Queue growth → System instability
-- **After Phase 1**: 307 OSC messages per chunk → Stable queue → System stability
+- **Before Phase 1**: 15,360 OSC messages per batch → Queue growth → System instability
+- **After Phase 1**: 307 OSC messages per batch → Stable queue → System stability
 
 ### Expected Improvements:
 1. **32 channels**: System should remain stable with bounded queue growth

@@ -16,7 +16,7 @@ The OSC sending mechanism is not fast enough for high channel counts, causing cu
 
 #### 1. **OSC Message Transmission (CRITICAL)**
 - **Current Behavior**: Sends one OSC message per sample
-- **Impact**: For 32 channels × 480 samples/chunk = 15,360 individual OSC messages per chunk
+- **Impact**: For 32 channels × 480 samples/batch = 15,360 individual OSC messages per batch
 - **Problems**: 
   - UDP overhead becomes significant
   - Unlimited OSC queue growth
@@ -50,13 +50,13 @@ The OSC sending mechanism is not fast enough for high channel counts, causing cu
 ```
 ZMQ Service → DataManager → Event Bus → OSC Service → Individual UDP Messages
      ↓            ↓           ↓            ↓              ↓
-Channel Data → Buffers → Events → Queue → 480 messages/chunk
+Channel Data → Buffers → Events → Queue → 480 messages/batch
 ```
 
 ### Performance Measurements
-- **16 channels**: ~7,680 OSC messages/chunk (manageable)
-- **32 channels**: ~15,360 OSC messages/chunk (borderline)
-- **64 channels**: ~30,720 OSC messages/chunk (system overload)
+- **16 channels**: ~7,680 OSC messages/batch (manageable)
+- **32 channels**: ~15,360 OSC messages/batch (borderline)
+- **64 channels**: ~30,720 OSC messages/batch (system overload)
 
 ### Memory Usage Analysis
 - **Current**: ~30MB for 256 channels (256 × 30,000 × 4 bytes)
@@ -84,7 +84,7 @@ for i in range(0, len(samples), batch_size):
 
 #### 1.2 Queue Management
 **Goal**: Prevent unbounded queue growth
-- Add configurable OSC queue size limits (default: 100 chunks)
+- Add configurable OSC queue size limits (default: 100 batches)
 - Implement overflow handling (drop oldest or newest)
 - Add queue monitoring and alerting
 - Backpressure to ZMQ service when queue is full
@@ -205,8 +205,8 @@ class MemoryPool:
 ## Success Criteria
 
 ### Performance Targets:
-- **32 channels**: Stable operation with <10ms average delay, queue growth <10 chunks
-- **64 channels**: Stable operation with <20ms average delay, queue growth <20 chunks
+- **32 channels**: Stable operation with <10ms average delay, queue growth <10 batches
+- **64 channels**: Stable operation with <20ms average delay, queue growth <20 batches
 - **128 channels**: Functional with acceptable delay (<50ms), stable queue
 - **256+ channels**: Experimental support with monitoring and degraded performance
 

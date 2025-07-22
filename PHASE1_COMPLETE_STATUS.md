@@ -4,7 +4,7 @@
 
 **OpenEphys ZMQ-to-OSC Bridge Performance Optimization**
 
-**Core Problem**: System fails with 32+ channels due to OSC message flooding (15,360+ messages per chunk causing cumulative delays and unbounded queue growth)
+**Core Problem**: System fails with 32+ channels due to OSC message flooding (15,360+ messages per batch causing cumulative delays and unbounded queue growth)
 
 **Solution**: OSC message batching reducing message count by 48-50x plus queue management and performance configuration system
 
@@ -28,7 +28,7 @@ Key methods implemented:
 - `_handle_queue_overflow()` - Queue management
 
 **Performance Impact**:
-- 32 channels × 15 samples = 480 individual messages → 10 batch messages
+- 32 channels × 15 samples = 480 individual messages → 10 batched messages
 - **48x reduction** in OSC message count
 
 ### 1.3 Queue Management ✅

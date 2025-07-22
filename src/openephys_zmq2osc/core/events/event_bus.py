@@ -11,17 +11,17 @@ class EventType(Enum):
     ZMQ_CONNECTION_ERROR = "zmq_connection_error"
     OSC_CONNECTION_STATUS = "osc_connection_status"
     OSC_CONNECTION_ERROR = "osc_connection_error"
-    
+
     # Data events
     DATA_RECEIVED = "data_received"
     DATA_PROCESSED = "data_processed"
     DATA_SENT = "data_sent"
-    
+
     # System events
     SERVICE_STARTED = "service_started"
     SERVICE_STOPPED = "service_stopped"
     SHUTDOWN_REQUESTED = "shutdown_requested"
-    
+
     # UI events
     UI_UPDATE_REQUIRED = "ui_update_required"
     STATUS_UPDATE = "status_update"
@@ -44,14 +44,18 @@ class EventBus:
         self._subscribers: Dict[EventType, List[Callable[[Event], None]]] = {}
         self._lock = threading.RLock()
 
-    def subscribe(self, event_type: EventType, callback: Callable[[Event], None]) -> None:
+    def subscribe(
+        self, event_type: EventType, callback: Callable[[Event], None]
+    ) -> None:
         """Subscribe to an event type with a callback function."""
         with self._lock:
             if event_type not in self._subscribers:
                 self._subscribers[event_type] = []
             self._subscribers[event_type].append(callback)
 
-    def unsubscribe(self, event_type: EventType, callback: Callable[[Event], None]) -> None:
+    def unsubscribe(
+        self, event_type: EventType, callback: Callable[[Event], None]
+    ) -> None:
         """Unsubscribe from an event type."""
         with self._lock:
             if event_type in self._subscribers:
@@ -66,7 +70,7 @@ class EventBus:
         with self._lock:
             if event.event_type in self._subscribers:
                 subscribers = self._subscribers[event.event_type].copy()
-        
+
         # Call subscribers outside of lock to prevent deadlocks
         for callback in subscribers:
             try:
@@ -75,7 +79,9 @@ class EventBus:
                 # Log error but don't stop other callbacks
                 print(f"Error in event callback for {event.event_type}: {e}")
 
-    def publish_event(self, event_type: EventType, data: Any = None, source: str = None) -> None:
+    def publish_event(
+        self, event_type: EventType, data: Any = None, source: str = None
+    ) -> None:
         """Convenience method to create and publish an event."""
         event = Event(event_type=event_type, data=data, source=source)
         self.publish(event)

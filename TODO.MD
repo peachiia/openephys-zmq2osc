@@ -10,5 +10,5 @@ Use these instructions as prompts to guide your work on the project:
 
 - [ ] right now the OSC sampling rate and the delay calculation is not reset to zero when data is not reached from zmq so please reset all those number to 0 when re-init function is called.
 
-- [ ] Show the estimated ZMQ data sampling delay (Chunk Delay) by the sampling rate divided by the size of the package (one data chunk) so we can see how much delay we have in the data flow. Show the number over the data receiving status in the GUI. The number should be shown in milliseconds and should be updated every second. Don't have to show color coding for the delay, just show the number.
+- [ ] Show the estimated ZMQ data sampling delay (Batch Delay) by the sampling rate divided by the size of the package (one data batch) so we can see how much delay we have in the data flow. Show the number over the data receiving status in the GUI. The number should be shown in milliseconds and should be updated every second. Don't have to show color coding for the delay, just show the number.
 

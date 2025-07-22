@@ -35,11 +35,11 @@
 ### OSC Message Batching Efficiency
 
 **Before Phase 1:**
-- 32 channels × 15 samples = **15,360 individual OSC messages per chunk**
+- 32 channels × 15 samples = **15,360 individual OSC messages per batch**
 - Unlimited queue growth leading to system instability
 
 **After Phase 1:**
-- 32 channels × 15 samples = **307 batch messages per chunk**
+- 32 channels × 15 samples = **307 batched messages per batch**
 - **50x reduction in OSC message overhead**
 - Queue growth controlled and bounded
 
@@ -47,13 +47,13 @@
 
 **High-Throughput Mode (`config_high_throughput.json`):**
 - Batch size: 50 samples per message
-- Queue limit: 50 chunks maximum
+- Queue limit: 50 batches maximum
 - Overflow strategy: drop_oldest
 - **Expected 48x efficiency gain**
 
 **Low-Latency Mode (`config_low_latency.json`):**
 - Batch size: 1 sample per message (no batching)
-- Queue limit: 10 chunks maximum
+- Queue limit: 10 batches maximum
 - **Preserves original behavior for low-latency scenarios**
 
 ## Key Technical Achievements

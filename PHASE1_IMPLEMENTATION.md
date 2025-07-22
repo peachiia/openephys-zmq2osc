@@ -14,7 +14,7 @@
 {
   "performance": {
     "osc_batch_size": 50,           // Batch 50 samples per OSC message
-    "osc_queue_max_size": 50,       // Limit queue to 50 chunks
+    "osc_queue_max_size": 50,       // Limit queue to 50 batches
     "osc_queue_overflow_strategy": "drop_oldest",
     "enable_batching": true,        // Master switch for batching
     "mode": "high_throughput"       // Performance preset
@@ -23,8 +23,8 @@
 ```
 
 ### 1.2 OSC Message Batching ✅
-- **Before**: 480 individual OSC messages per chunk (32 channels × 15 samples)
-- **After**: 10 batch messages per chunk (480 samples ÷ 50 batch size)
+- **Before**: 480 individual OSC messages per batch (32 channels × 15 samples)
+- **After**: 10 batched messages per batch (480 samples ÷ 50 batch size)
 - **Performance Gain**: 48x reduction in OSC messages
 
 **Implementation Details:**
@@ -56,13 +56,13 @@ Messages    Sent: 1000 | OSC: 20 | Batch: 50 (50.0x)
 
 ### High-Throughput Mode (32+ channels)
 - Batch size: 50 samples
-- Queue limit: 50 chunks
+- Queue limit: 50 batches
 - UI updates: 200ms intervals
 - **Expected**: 50x reduction in OSC messages
 
 ### Low-Latency Mode (1-16 channels)  
 - Batch size: 1 sample (no batching)
-- Queue limit: 10 chunks
+- Queue limit: 10 batches
 - UI updates: 50ms intervals
 - **Expected**: Minimal latency impact
 
@@ -97,7 +97,7 @@ Messages    Sent: 1000 | OSC: 20 | Batch: 50 (50.0x)
 ```
 
 ### 3. Performance Validation
-- **32 channels**: Monitor queue size - should remain <10 chunks
+- **32 channels**: Monitor queue size - should remain <10 batches
 - **64 channels**: System should be stable with minimal delays
 - **Queue overflows**: Should be 0 under normal operation
 

@@ -21,10 +21,12 @@
     "base_address": "/data",
     "send_individual_channels": false,
     "channel_address_format": "/ch{:03d}",
-    "downsampling_factor": 30,
-    "downsampling_method": "average",
-    "chunk_format": "simple_array",
-    "chunk_include_metadata": false
+    "processing": {
+      "downsampling_factor": 30,
+      "downsampling_method": "average",
+      "batch_size": 50,
+      "batch_timeout_ms": 100.0
+    }
   },
   "ui": {
     "refresh_rate": 5,
@@ -32,7 +34,6 @@
     "show_debug_info": false
   },
   "performance": {
-    "osc_batch_size": 50,
     "osc_queue_max_size": 200,
     "osc_queue_overflow_strategy": "drop_oldest",
     "ui_update_interval_ms": 200,

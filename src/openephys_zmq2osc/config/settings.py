@@ -58,8 +58,7 @@ class AppConfig:
 class PerformanceConfig:
     """Performance optimization settings for high-throughput scenarios."""
 
-    # OSC batching configuration
-    osc_batch_size: int = 2  # Number of samples per OSC message (1 = no batching)
+    # OSC batching configuration (batch_size moved to ProcessingConfig)
     osc_queue_max_size: int = 100  # Maximum queue size before overflow handling
     osc_queue_overflow_strategy: str = (
         "drop_oldest"  # "drop_oldest", "drop_newest", "block"

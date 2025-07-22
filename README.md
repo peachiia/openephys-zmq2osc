@@ -257,7 +257,7 @@ Processing     Downsampling: 30:1 | Method: Average
 ### High CPU Usage
 
 - Enable batching: `"enable_batching": true`
-- Increase batch size: `"osc_batch_size": 50`
+- Increase batch size: `"batch_size": 50` (in osc.processing section)
 - Reduce UI refresh rate: `"refresh_rate": 5`
 
 ### Data Dropouts

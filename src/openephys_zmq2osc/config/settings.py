@@ -24,6 +24,14 @@ class OSCConfig:
     base_address: str = "/data"
     send_individual_channels: bool = False
     channel_address_format: str = "/ch{:03d}"
+    
+    # Downsampling configuration (for individual sample mode)
+    downsampling_factor: int = 8  # 1 = no downsampling, 30 = 30:1 reduction
+    downsampling_method: str = "average"  # "average", "decimate"
+    
+    # Chunk batch mode configuration
+    chunk_format: str = "timestamped"  # "timestamped", "simple_array"
+    chunk_include_metadata: bool = True
 
 
 @dataclass

@@ -5,6 +5,7 @@ import numpy as np
 from pythonosc import udp_client
 
 from ..events.event_bus import get_event_bus, EventType, Event
+from ..utils.signal_processing import SignalProcessor, validate_downsampling_config
 
 
 class OSCService:
@@ -62,6 +63,27 @@ class OSCService:
         self.base_address = "/data"
         self.send_individual_channels = False
         self.channel_address_format = "/ch{:03d}"
+        
+        # Signal processing and downsampling
+        self.signal_processor = SignalProcessor(config)
+        self.downsampling_factor = 1
+        self.downsampling_method = "average"
+        self.chunk_format = "timestamped"
+        self.chunk_include_metadata = True
+        
+        if config and hasattr(config, "osc"):
+            osc_config = config.osc
+            self.downsampling_factor = getattr(osc_config, 'downsampling_factor', 1)
+            self.downsampling_method = getattr(osc_config, 'downsampling_method', 'average')
+            self.chunk_format = getattr(osc_config, 'chunk_format', 'timestamped')
+            self.chunk_include_metadata = getattr(osc_config, 'chunk_include_metadata', True)
+        
+        # Validate downsampling config
+        is_valid, error_msg = validate_downsampling_config(self.downsampling_factor, self.downsampling_method)
+        if not is_valid:
+            print(f"Warning: Invalid downsampling config: {error_msg}. Using defaults.")
+            self.downsampling_factor = 1
+            self.downsampling_method = "average"
 
     def start(self) -> None:
         """Start the OSC service."""
@@ -217,6 +239,10 @@ class OSCService:
             # Update data flow tracking
             self._last_data_time = receive_time
             self._data_flow_active = True
+
+            # Initialize signal processor with channel count if needed
+            if len(datalist) > 0 and self.signal_processor.num_channels == 0:
+                self.signal_processor.initialize(len(datalist))
 
             # Track for delay calculation
             self._data_receive_times.append(receive_time)
@@ -390,8 +416,8 @@ class OSCService:
                 self.client.send_message(address, channel_data)
 
     def _send_combined_data(self, datalist: List[np.ndarray]) -> None:
-        """Send all channels as combined data with optional batching."""
-        # Convert to numpy array and transpose for sample-wise sending
+        """Send all channels as combined data with new mode support."""
+        # Convert to numpy array and transpose for sample-wise processing
         if isinstance(datalist, list):
             data_array = np.array(datalist)
         else:
@@ -401,14 +427,11 @@ class OSCService:
         transposed_data = data_array.T
 
         if self._batching_enabled and self._batch_size > 1:
-            # Send samples in batches
-            self._send_batched_samples(transposed_data)
+            # CHUNK BATCH MODE - Enhanced batching with new formats
+            self._send_chunk_batch_mode(transposed_data)
         else:
-            # Fast path: send each sample individually (optimized)
-            # Pre-convert entire array to list once instead of per-sample conversion
-            sample_list = transposed_data.tolist()
-            for sample_data in sample_list:
-                self.client.send_message(self.base_address, sample_data)
+            # INDIVIDUAL SAMPLE MODE - With downsampling support
+            self._send_individual_sample_mode(transposed_data)
 
     def _send_batched_samples(self, transposed_data: np.ndarray) -> None:
         """Send samples in batches for improved performance."""
@@ -429,6 +452,79 @@ class OSCService:
                 batch_data = sample_list[i:end_idx]
                 batch_address = f"{self.base_address}/batch/{len(batch_data)}"
                 self.client.send_message(batch_address, batch_data)
+    
+    def _send_individual_sample_mode(self, transposed_data: np.ndarray) -> None:
+        """Send samples individually with downsampling support."""
+        # Process samples through signal processor for downsampling
+        processed_samples = self.signal_processor.process_samples(transposed_data)
+        
+        # Send each processed sample to /data/sample
+        sample_address = f"{self.base_address}/sample"
+        for sample_data in processed_samples:
+            if isinstance(sample_data, np.ndarray):
+                sample_list = sample_data.tolist()
+            else:
+                sample_list = sample_data
+            self.client.send_message(sample_address, sample_list)
+    
+    def _send_chunk_batch_mode(self, transposed_data: np.ndarray) -> None:
+        """Send samples in enhanced chunk batch mode."""
+        total_samples = len(transposed_data)
+        num_channels = transposed_data.shape[1] if len(transposed_data.shape) > 1 else 1
+        
+        # Convert to list format for OSC transmission
+        sample_list = transposed_data.tolist()
+        
+        # Send samples in batches based on configured batch size
+        for i in range(0, total_samples, self._batch_size):
+            end_idx = min(i + self._batch_size, total_samples)
+            batch_data = sample_list[i:end_idx]
+            batch_size = end_idx - i
+            
+            if self.chunk_format == "timestamped":
+                self._send_timestamped_chunk(batch_data, batch_size, num_channels)
+            elif self.chunk_format == "simple_array":
+                self._send_simple_array_chunk(batch_data, batch_size, num_channels)
+            else:
+                # Fallback to original batching
+                if batch_size == 1:
+                    self.client.send_message(self.base_address, batch_data[0])
+                else:
+                    batch_address = f"{self.base_address}/batch/{batch_size}"
+                    self.client.send_message(batch_address, batch_data)
+    
+    def _send_timestamped_chunk(self, batch_data: List, batch_size: int, num_channels: int) -> None:
+        """Send chunk with timestamp and metadata (recommended format)."""
+        chunk_address = f"{self.base_address}/chunk"
+        current_time = time.time()
+        
+        if self.chunk_include_metadata:
+            # Format: [timestamp, num_samples, num_channels, ...flattened_data...]
+            flattened_data = []
+            for sample in batch_data:
+                flattened_data.extend(sample)
+            
+            chunk_message = [current_time, batch_size, num_channels] + flattened_data
+        else:
+            # Format: [timestamp, ...flattened_data...]
+            flattened_data = []
+            for sample in batch_data:
+                flattened_data.extend(sample)
+            
+            chunk_message = [current_time] + flattened_data
+        
+        self.client.send_message(chunk_address, chunk_message)
+    
+    def _send_simple_array_chunk(self, batch_data: List, batch_size: int, num_channels: int) -> None:
+        """Send chunk as simple flattened array with size in address."""
+        chunk_address = f"{self.base_address}/chunk/{batch_size}x{num_channels}"
+        
+        # Flatten data: [sample1_ch1, sample1_ch2, ..., sample2_ch1, sample2_ch2, ...]
+        flattened_data = []
+        for sample in batch_data:
+            flattened_data.extend(sample)
+        
+        self.client.send_message(chunk_address, flattened_data)
 
     def send_message(self, address: str, value: Union[float, int, str, List]) -> bool:
         """Send a custom OSC message."""
@@ -460,6 +556,8 @@ class OSCService:
             self._last_data_time = 0
             # Reset drop counter only on reinit
             self._messages_dropped = 0
+            # Reset signal processor
+            self.signal_processor.reset()
 
             # Immediately publish reset status to update UI
             self._event_bus.publish_event(
@@ -480,7 +578,6 @@ class OSCService:
                 },
                 source="OSCService",
             )
-            print("OSC metrics reset due to data reinit")
 
     def configure(self, **kwargs) -> None:
         """Configure OSC service parameters."""
@@ -494,6 +591,33 @@ class OSCService:
             self.send_individual_channels = kwargs["send_individual_channels"]
         if "channel_address_format" in kwargs:
             self.channel_address_format = kwargs["channel_address_format"]
+        if "downsampling_factor" in kwargs:
+            factor = kwargs["downsampling_factor"]
+            is_valid, error_msg = validate_downsampling_config(factor, self.downsampling_method)
+            if is_valid:
+                self.downsampling_factor = factor
+                # Recreate signal processor with new config
+                if hasattr(self, 'signal_processor'):
+                    self.signal_processor.downsampling_factor = factor
+                    if self.signal_processor.num_channels > 0:
+                        self.signal_processor.initialize(self.signal_processor.num_channels)
+            else:
+                print(f"Invalid downsampling factor: {error_msg}")
+        if "downsampling_method" in kwargs:
+            method = kwargs["downsampling_method"]
+            is_valid, error_msg = validate_downsampling_config(self.downsampling_factor, method)
+            if is_valid:
+                self.downsampling_method = method
+                if hasattr(self, 'signal_processor'):
+                    self.signal_processor.downsampling_method = method
+                    if self.signal_processor.num_channels > 0:
+                        self.signal_processor.initialize(self.signal_processor.num_channels)
+            else:
+                print(f"Invalid downsampling method: {error_msg}")
+        if "chunk_format" in kwargs:
+            self.chunk_format = kwargs["chunk_format"]
+        if "chunk_include_metadata" in kwargs:
+            self.chunk_include_metadata = kwargs["chunk_include_metadata"]
 
         # If service is running, restart with new configuration
         if self._running:
@@ -504,7 +628,7 @@ class OSCService:
 
     def get_status(self) -> dict:
         """Get current service status."""
-        return {
+        status = {
             "running": self._running,
             "connected": self._connection_active,
             "host": self.host,
@@ -515,7 +639,17 @@ class OSCService:
             "messages_sent": self._messages_sent,
             "last_send_time": self._last_send_time,
             "queue_size": len(self._data_queue),
+            "downsampling_factor": self.downsampling_factor,
+            "downsampling_method": self.downsampling_method,
+            "chunk_format": self.chunk_format,
+            "batching_enabled": self._batching_enabled,
         }
+        
+        # Add signal processor status if available
+        if hasattr(self, 'signal_processor') and self.signal_processor:
+            status.update(self.signal_processor.get_status())
+        
+        return status
 
     def get_statistics(self) -> dict:
         """Get service statistics."""

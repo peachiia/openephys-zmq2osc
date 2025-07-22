@@ -1,4 +1,10 @@
 {
+  "app": {
+    "app_name": "OpenEphys - ZMQ to OSC (Low Latency)",
+    "app_version": "0.1.0",
+    "log_level": "INFO",
+    "config_file": "config_low_latency.json"
+  },
   "zmq": {
     "host": "localhost",
     "data_port": 5556,
@@ -14,22 +20,20 @@
     "port": 10000,
     "base_address": "/data",
     "send_individual_channels": false,
-    "channel_address_format": "/ch{:03d}"
+    "channel_address_format": "/ch{:03d}",
+    "downsampling_factor": 10,
+    "downsampling_method": "average",
+    "chunk_format": "timestamped",
+    "chunk_include_metadata": true
   },
   "ui": {
-    "refresh_rate": 10,
+    "refresh_rate": 20,
     "theme": "default",
-    "show_debug_info": false
-  },
-  "app": {
-    "app_name": "OpenEphys - ZMQ to OSC (Low Latency)",
-    "app_version": "0.1.0",
-    "log_level": "INFO",
-    "config_file": "config.json"
+    "show_debug_info": true
   },
   "performance": {
     "osc_batch_size": 1,
-    "osc_queue_max_size": 10,
+    "osc_queue_max_size": 50,
     "osc_queue_overflow_strategy": "drop_oldest",
     "ui_update_interval_ms": 50,
     "metrics_collection_interval_ms": 100,

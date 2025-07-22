@@ -410,6 +410,23 @@ class CLIInterface(BaseInterface):
         else:
             grid.add_row("Batch Delay", "[dim]-- ms[/dim]")
 
+        # Downsampling information
+        downsampling_factor = self._osc_status.get("downsampling_factor", 1)
+        downsampling_method = self._osc_status.get("downsampling_method", "average")
+        
+        if downsampling_factor > 1:
+            downsampling_text = f"ENABLED ({downsampling_factor}:1)"
+            grid.add_row("Downsampling", downsampling_text)
+            grid.add_row("DS Method", downsampling_method.title())
+            
+            # Show effective output rate
+            if mean_rate > 0:
+                effective_rate = mean_rate / downsampling_factor
+                grid.add_row("Output Rate", f"{effective_rate:.1f} Hz")
+        else:
+            downsampling_text = "DISABLED"
+            grid.add_row("Downsampling", f"[dim]{downsampling_text}[/dim]")
+
         grid.add_row(Rule(style="grid_rule"), Rule(style="grid_rule"))
 
         # Status

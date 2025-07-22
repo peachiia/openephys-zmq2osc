@@ -72,7 +72,7 @@ class PerformanceConfig:
     mode: str = "balanced"  # "low_latency", "balanced", "high_throughput"
 
     # Advanced settings
-    enable_batching: bool = True  # Master switch for batching optimizations
+    enable_batching: bool = False  # Master switch for batching optimizations
     adaptive_batching: bool = False  # Automatically adjust batch size based on load
 
 

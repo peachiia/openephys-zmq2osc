@@ -414,7 +414,7 @@ class CLIInterface(BaseInterface):
 
         # Status
         if self._osc_status["running"] and self._osc_status["connected"]:
-            status = "Online"
+            status = "READY"
             status_style = "online"
         elif self._osc_status["running"]:
             status = "Starting"

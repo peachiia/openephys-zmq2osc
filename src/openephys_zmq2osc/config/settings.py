@@ -46,7 +46,7 @@ class PerformanceConfig:
     """Performance optimization settings for high-throughput scenarios."""
 
     # OSC batching configuration
-    osc_batch_size: int = 4  # Number of samples per OSC message (1 = no batching)
+    osc_batch_size: int = 1  # Number of samples per OSC message (1 = no batching)
     osc_queue_max_size: int = 100  # Maximum queue size before overflow handling
     osc_queue_overflow_strategy: str = (
         "drop_oldest"  # "drop_oldest", "drop_newest", "block"
@@ -60,7 +60,7 @@ class PerformanceConfig:
     mode: str = "balanced"  # "low_latency", "balanced", "high_throughput"
 
     # Advanced settings
-    enable_batching: bool = True  # Master switch for batching optimizations
+    enable_batching: bool = False  # Master switch for batching optimizations
     adaptive_batching: bool = False  # Automatically adjust batch size based on load
 
 

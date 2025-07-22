@@ -370,7 +370,7 @@ class CLIInterface(BaseInterface):
 
         grid.add_row("", Rule(style="grid_rule"))
 
-        
+
         # Downsampling information
         downsampling_factor = self._osc_status.get("downsampling_factor", 1)
         downsampling_method = self._osc_status.get("downsampling_method", "average")
@@ -431,7 +431,7 @@ class CLIInterface(BaseInterface):
             grid.add_row("Sample Rate", f"{default_output:.1f} Hz (default)")
             grid.add_row("", f"[dim]{default_output:.1f} Hz (mean)[/dim]")
 
-        
+
 
         # Calculate and display batch delay (avoid division by zero)
         if mean_input_rate > 0:

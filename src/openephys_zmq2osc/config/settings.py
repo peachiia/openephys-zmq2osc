@@ -1,5 +1,5 @@
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +18,15 @@ class ZMQConfig:
 
 
 @dataclass
+class ProcessingConfig:
+    """Unified processing configuration for downsampling and batching."""
+    downsampling_factor: int = 30  # 1 = no downsampling, 30 = 30:1 reduction
+    downsampling_method: str = "average"  # "average", "decimate"
+    batch_size: int = 1  # Number of samples per OSC message (1 = no batching)
+    batch_timeout_ms: float = 1000.0  # Send partial batches after timeout
+
+
+@dataclass
 class OSCConfig:
     host: str = "127.0.0.1"
     port: int = 10000
@@ -25,13 +34,12 @@ class OSCConfig:
     send_individual_channels: bool = False
     channel_address_format: str = "/ch{:03d}"
 
-    # Downsampling configuration (for individual sample mode)
-    downsampling_factor: int = 30  # 1 = no downsampling, 30 = 30:1 reduction
-    downsampling_method: str = "average"  # "average", "decimate"
+    # Unified processing configuration
+    processing: ProcessingConfig = field(default_factory=ProcessingConfig)
 
-    # Chunk batch mode configuration
-    chunk_format: str = "simple_array"  # "timestamped", "simple_array"
-    chunk_include_metadata: bool = True
+    # Legacy configuration (kept for backward compatibility)
+    downsampling_factor: int = 30  # Deprecated: use processing.downsampling_factor
+    downsampling_method: str = "average"  # Deprecated: use processing.downsampling_method
 
 
 @dataclass
@@ -87,9 +95,20 @@ class Config:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Config":
         """Create config from dictionary."""
+        # Handle OSC config with nested processing config
+        osc_data = data.get("osc", {})
+        if "processing" in osc_data:
+            processing_config = ProcessingConfig(**osc_data["processing"])
+        else:
+            processing_config = ProcessingConfig()
+
+        # Create OSC config with processing config
+        osc_config = OSCConfig(**{k: v for k, v in osc_data.items() if k != "processing"})
+        osc_config.processing = processing_config
+
         return cls(
             zmq=ZMQConfig(**data.get("zmq", {})),
-            osc=OSCConfig(**data.get("osc", {})),
+            osc=osc_config,
             ui=UIConfig(**data.get("ui", {})),
             app=AppConfig(**data.get("app", {})),
             performance=PerformanceConfig(**data.get("performance", {})),

@@ -1,8 +1,8 @@
 # OpenEphys ZMQ to OSC Bridge
 
-A high-performance, real-time data bridge for neuroscience applications. Receives neural data streams from OpenEphys GUI via ZMQ and forwards them to creative applications using OSC protocol.
+A high-performance, real-time data bridge for neuroscience applications. Receives neural data streams from OpenEphys GUI via ZMQ and forwards them to creative applications using OSC protocol. 
 
-**Designed for artists, researchers, and creative technologists** working with real-time neural data in interactive art, performance, and research setups.
+For the kind of creative who sees no difference between patching signals in TouchDesigner and wiring electrodes into the brain.
 
 ## Features
 
@@ -10,7 +10,7 @@ A high-performance, real-time data bridge for neuroscience applications. Receive
 - **Real-Time Monitoring** - Rich terminal interface with live performance metrics
 - **Cross-Platform Distribution** - Single-file executables for Linux, macOS, and Windows
 - **Flexible Configuration** - JSON-based config with performance presets
-- **Artist-Friendly** - Zero-setup binaries ready for creative applications
+- **Artist-Friendly** - (almost) Zero-setup binaries ready for creative applications
 
 ## Quick Start
 
@@ -26,20 +26,29 @@ Get the latest binary for your platform from the [releases page]:
 ### Basic Usage
 
 ```bash
-# Make executable (macOS/Linux)
+# Make executable (macOS/Linux) - Only needed once
 chmod +x openephys-zmq2osc-*
-
-# Create default configuration
-./openephys-zmq2osc --create-config
 
 # Run with default settings
 ./openephys-zmq2osc
+```
+
+The config.json file is automatically generated in the current directory. Any changes you make to this file will be applied the next time you run the program—no need to use the --config option. **In most cases, you won’t need to modify anything at all.**
+
+## Configuration
+
+### Advanced Usage
+
+```bash
+# Create default configuration file for customization
+./openephys-zmq2osc --create-config
+
+# Run with custom configuration
+./openephys-zmq2osc --config config.json
 
 # Run with high-throughput preset
 ./openephys-zmq2osc --config config_high_throughput.json
 ```
-
-## Configuration
 
 ### Quick Setup Presets
 
@@ -103,11 +112,13 @@ Generate optimized configurations for different use cases:
 ## OSC Data Formats
 
 ### Sample Mode (Default)
+
 - **Address:** `/data/sample`
 - **Format:** `[ch0, ch1, ch2, ..., ch31]`
 - **Rate:** Configurable downsampling (1x to 100x reduction)
 
 ### Batch Mode (High-Throughput)
+
 - **Address:** `/data/chunk`
 - **Format:** `[timestamp, samples, channels, ...data...]`
 - **Rate:** Reduced message count via batching
@@ -115,6 +126,7 @@ Generate optimized configurations for different use cases:
 ## Performance Modes
 
 ### High-Throughput (32+ Channels)
+
 ```json
 {
   "osc": {
@@ -133,6 +145,7 @@ Generate optimized configurations for different use cases:
 **Results:** 48x reduction in OSC messages, stable with 64+ channels
 
 ### Low-Latency (1-16 Channels)
+
 ```json
 {
   "osc": {
@@ -153,6 +166,7 @@ Generate optimized configurations for different use cases:
 ## Creative Application Examples
 
 ### Max/MSP
+
 ```max
 [udpreceive 10000]
 |
@@ -162,12 +176,14 @@ Generate optimized configurations for different use cases:
 ```
 
 ### TouchDesigner
+
 1. Add **OSC In DAT**
 2. Set **Port** to `10000`
 3. Set **Address Filter** to `/data/*`
 4. Neural data appears as arrays
 
 ### Pure Data
+
 ```pd
 [netreceive 10000 1]
 |
@@ -207,16 +223,19 @@ Processing     Downsampling: 30:1 | Method: Average
 ## Troubleshooting
 
 ### High CPU Usage
+
 - Enable batching: `"enable_batching": true`
 - Increase batch size: `"osc_batch_size": 50`
 - Reduce UI refresh rate: `"refresh_rate": 5`
 
 ### Data Dropouts
+
 - Increase queue size: `"osc_queue_max_size": 200`
 - Use `drop_oldest` overflow strategy
 - Check network bandwidth
 
 ### Connection Issues
+
 - Verify OpenEphys ZMQ plugin configuration
 - Check firewall settings
 - Try IP `127.0.0.1` instead of `localhost`
@@ -247,10 +266,10 @@ MIT License - see LICENSE file for details.
 
 ## Support
 
-- **Issues:** [GitHub Issues](https://github.com/your-username/openephys-zmq2osc/issues)
-- **Documentation:** See `CLAUDE.md` for technical details
-- **Community:** [Discussions](https://github.com/your-username/openephys-zmq2osc/discussions)
+- **Issues:** [GitHub Issues](https://github.com/peachiia/openephys-zmq2osc/issues)
+- **Developer Note:** Check out CLAUDE.md for the nitty-gritty. (You know… vibe coding doesn't stop at the surface.)
+- **Contributions:** Pull requests welcome! I have no idea what I’m doing, but with your AI tokens, we might just make history. : P
 
 ---
 
-**Ready for Production** - Download, configure, and start streaming neural data to your creative applications in minutes!
+**Disclaimer** : This code is a performance piece. Bugs are part of the narrative arc. But if one ruins your scene, let me know and I’ll rewrite the script (or cry artistically, lol).

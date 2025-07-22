@@ -65,6 +65,8 @@ class CLIInterface(BaseInterface):
             "messages_sent": 0,
             "actual_osc_messages": 0,
             "batch_size": 1,
+            "original_batch_size": 1,
+            "enable_batching": True,
             "queue_size": 0,
             "queue_overflows": 0,
             "messages_dropped": 0,
@@ -370,7 +372,6 @@ class CLIInterface(BaseInterface):
 
         grid.add_row("", Rule(style="grid_rule"))
 
-        
         # Downsampling information
         downsampling_factor = self._osc_status.get("downsampling_factor", 1)
         downsampling_method = self._osc_status.get("downsampling_method", "average")
@@ -385,12 +386,19 @@ class CLIInterface(BaseInterface):
 
         # Batch size and batch delay
         batch_size = self._osc_status.get("batch_size", 1)
+        original_batch_size = self._osc_status.get("original_batch_size", 1)
+        enable_batching = self._osc_status.get("enable_batching", True)
 
-        # Show batching status with enabled/disabled indication
-        if batch_size > 1:
+        # Show batching status with enabled/disabled indication and override warning
+        if enable_batching:
             batching_text = f"ENABLED ({batch_size})"
         else:
-            batching_text = f"DISABLED ({batch_size})"
+            batching_text = "DISABLED"
+
+        # Show override warning when enable_batching=False but original_batch_size != 1
+        if not enable_batching and original_batch_size != 1:
+            batching_text += f" [val_warning]OVR[/val_warning] ({original_batch_size}->1)"
+
         grid.add_row("Batching", batching_text)
 
         grid.add_row("", Rule(style="grid_rule"))
@@ -411,15 +419,23 @@ class CLIInterface(BaseInterface):
         downsampling_factor = self._osc_status.get("downsampling_factor", 1)
 
         # Calculate actual output rates after downsampling
-        current_output_rate = input_rate / downsampling_factor if downsampling_factor > 1 else input_rate
-        mean_output_rate = mean_input_rate / downsampling_factor if downsampling_factor > 1 else mean_input_rate
+        current_output_rate = (
+            input_rate / downsampling_factor if downsampling_factor > 1 else input_rate
+        )
+        mean_output_rate = (
+            mean_input_rate / downsampling_factor
+            if downsampling_factor > 1
+            else mean_input_rate
+        )
 
         if data_active and input_rate > 0:
             # Show current output rate on first line
             current_text = f"{current_output_rate:.1f} Hz"
             grid.add_row("Sample Rate", current_text)
             # Show mean output rate on second line if significantly different
-            if abs(current_output_rate - mean_output_rate) > (100 / max(1, downsampling_factor)):
+            if abs(current_output_rate - mean_output_rate) > (
+                100 / max(1, downsampling_factor)
+            ):
                 mean_text = f"{mean_output_rate:.1f} Hz (mean)"
                 grid.add_row("", f"[dim]{mean_text}[/dim]")
         elif not data_active:
@@ -427,11 +443,11 @@ class CLIInterface(BaseInterface):
             grid.add_row("Sample Rate", "[dim]0 Hz *no data[/dim]")
             grid.add_row("", "[dim]0 Hz (mean)[/dim]")
         else:
-            default_output = 30000.0 / downsampling_factor if downsampling_factor > 1 else 30000.0
+            default_output = (
+                30000.0 / downsampling_factor if downsampling_factor > 1 else 30000.0
+            )
             grid.add_row("Sample Rate", f"{default_output:.1f} Hz (default)")
             grid.add_row("", f"[dim]{default_output:.1f} Hz (mean)[/dim]")
-
-        
 
         # Calculate and display batch delay (avoid division by zero)
         if mean_input_rate > 0:
@@ -443,8 +459,6 @@ class CLIInterface(BaseInterface):
             grid.add_row("Batch Delay", delay_text)
         else:
             grid.add_row("Batch Delay", "[dim]-- ms[/dim]")
-
-
 
         grid.add_row(Rule(style="grid_rule"), Rule(style="grid_rule"))
 
@@ -474,15 +488,19 @@ class CLIInterface(BaseInterface):
             # Show efficiency gain from batching
             if batch_size > 1 and actual_osc > 0:
                 efficiency = (messages_sent / actual_osc) if actual_osc > 0 else 1.0
-                stats = f"Sent: {messages_sent} | OSC: {actual_osc} | Batch: {batch_size} ({efficiency:.1f}x)"
+                stats = f"Proc: {messages_sent} | OSC: {actual_osc} | Batch: {batch_size} ({efficiency:.1f}x)"
             else:
                 # Get queue max size for percentage calculation
                 queue_max_size = 100  # Default, should be read from config
-                if hasattr(self.config, "performance") and hasattr(self.config.performance, "osc_queue_max_size"):
+                if hasattr(self.config, "performance") and hasattr(
+                    self.config.performance, "osc_queue_max_size"
+                ):
                     queue_max_size = self.config.performance.osc_queue_max_size
 
                 # Calculate queue percentage and apply color coding
-                queue_percentage = (queue_size / queue_max_size) * 100 if queue_max_size > 0 else 0
+                queue_percentage = (
+                    (queue_size / queue_max_size) * 100 if queue_max_size > 0 else 0
+                )
 
                 if queue_percentage >= 80:
                     queue_color = "val_error"  # Red
@@ -491,20 +509,22 @@ class CLIInterface(BaseInterface):
                 else:
                     queue_color = "white"  # Normal
 
-                stats = f"Sent: {messages_sent} | Queue: [{queue_color}]{queue_size}[/{queue_color}]"
+                stats = f"Proc: {messages_sent} | Queue: [{queue_color}]{queue_size}[/{queue_color}]"
 
-            grid.add_row("Messages", stats)
+            grid.add_row("Data Blocks", stats)
 
             # Drop counter display (always show if drops occurred)
             #   Overflows:      Number of times the queue reached capacity (overflow events)
-            #   Drops Total:    Total number of individual messages that were actually dropped
+            #   Drops Total:    Total number of individual data blocks that were actually dropped
 
-            overflows = self._osc_status.get("queue_overflows", 0)  # Queue overflows called
-            dropped = self._osc_status.get("messages_dropped", 0)   # Messages dropped
+            overflows = self._osc_status.get(
+                "queue_overflows", 0
+            )  # Queue overflows called
+            dropped = self._osc_status.get("messages_dropped", 0)  # Data blocks dropped
 
             # Drop counter display (always show if drops occurred)
             if dropped > 0:
-                drop_text = f"Drops! {dropped} batches"
+                drop_text = f"Drops! {dropped} blocks"
                 grid.add_row("", f"[val_error]{drop_text}[/val_error]")
 
             if overflows > 0 or dropped > 0:
@@ -512,7 +532,6 @@ class CLIInterface(BaseInterface):
                 grid.add_row("! onOverflows", f"[val_warning]{perf_text}[/val_warning]")
                 perf_text = f"{dropped}"
                 grid.add_row("! onDropped", f"[val_warning]{perf_text}[/val_warning]")
-
 
             # Delay information
             delay_ms = self._osc_status.get("avg_delay_ms", 0.0)
@@ -537,7 +556,7 @@ class CLIInterface(BaseInterface):
             else:
                 grid.add_row("OSC Delay", "[dim]Calculating...[/dim]")
         else:
-            grid.add_row("No Data Sent", "")
+            grid.add_row("No Data Processed", "")
 
         return Panel(grid, title="OSC", border_style="default")
 
@@ -554,13 +573,20 @@ class CLIInterface(BaseInterface):
             info_text = self._info_messages[-1]  # Show most recent info
 
         # Left side - controls
-        left_controls = "[dim]Press Ctrl+C to quit | Ctrl+F to reinit[/dim]"
+        left_controls = "[dim]Press Ctrl+C to quit | [/dim]"
+
+        #grid.add_row(
+        #    left_controls,
+        #    info_text,
+        #    f"[dim]Refresh: {self.config.ui.refresh_rate}Hz[/dim]",
+        #)
 
         grid.add_row(
             left_controls,
             info_text,
-            f"[dim]Refresh: {self.config.ui.refresh_rate}Hz[/dim]",
+            "[dim]@peachiia[/dim]",
         )
+
 
         return Panel(grid, style="dim")
 

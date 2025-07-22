@@ -36,7 +36,7 @@ class ZMQService:
         self.message_num = 0
         self.socket_waits_reply = False
         self.uuid = "1618"  # Consider making this configurable
-        self.app_name = f"OpenEphys-ZMQ2OSC-{self.uuid[:4]}"
+        self.app_name = f"ZMQ2OSC-{self.uuid[:4]}"
 
         self.last_heartbeat_timestamp = 0
         self.last_reply_timestamp = time.time()
@@ -426,7 +426,7 @@ class ZMQService:
         """Handle heartbeat reply from server."""
         try:
             if self.heartbeat_socket:
-                message = self.heartbeat_socket.recv()
+                self.heartbeat_socket.recv()  # Read heartbeat reply (don't need to store)
                 self.connection_status = ConnectionStatus.ONLINE
                 self._publish_status_update()
 

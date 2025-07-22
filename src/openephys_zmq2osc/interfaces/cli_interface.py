@@ -338,23 +338,26 @@ class CLIInterface(BaseInterface):
             channels_text = "Auto-detect"
         grid.add_row("Channels", channels_text)
         
-        # Dynamic sampling rate display with mean rate
+        # Dynamic sampling rate display with mean rate on separate lines
         data_active = self._osc_status.get("data_flow_active", False)
         current_rate = self._osc_status.get("calculated_sample_rate", 30000.0)
         mean_rate = self._osc_status.get("mean_sample_rate", 30000.0)
         
         if data_active and current_rate > 0:
-            # Show both current and mean rates when data is active
-            if abs(current_rate - mean_rate) > 100:  # Show both if they differ significantly
-                rate_text = f"{current_rate:.1f} Hz (mean: {mean_rate:.1f} Hz)"
-            else:
-                rate_text = f"{current_rate:.1f} Hz"
+            # Show current rate on first line
+            current_text = f"{current_rate:.1f}"
+            grid.add_row("Sample Rate", current_text)
+            # Show mean rate on second line if significantly different
+            if abs(current_rate - mean_rate) > 100:
+                mean_text = f"{mean_rate:.1f} (mean)"
+                grid.add_row("", f"[dim]{mean_text}[/dim]")
         elif not data_active:
             # Show zero with indicator when no data
-            rate_text = "[dim]0 Hz *no data[/dim]"
+            grid.add_row("Sample Rate", "[dim]0 *no data[/dim]")
+            grid.add_row("", "[dim]0 (mean)[/dim]")
         else:
-            rate_text = "30000 Hz (default)"
-        grid.add_row("Sample Rate", rate_text)
+            grid.add_row("Sample Rate", "30000 (default)")
+            grid.add_row("", "[dim]30000 (mean)[/dim]")
         
         grid.add_row(Rule(style="grid_rule"), Rule(style="grid_rule"))
         

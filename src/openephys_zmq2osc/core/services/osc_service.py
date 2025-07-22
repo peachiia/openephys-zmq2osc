@@ -333,13 +333,32 @@ class OSCService:
         event_type = event.data.get("type")
         
         if event_type in ["auto_reinit_completed", "manual_reinit_completed"]:
-            # Reset sampling rate and delay tracking when reinit occurs
+            # Reset all sampling rate and delay tracking when reinit occurs
             self._calculated_sample_rate = 0.0
             self._mean_sample_rate = 0.0
             self._recent_delays = []
             self._sample_timestamps = []
             self._rate_history = []
             self._data_flow_active = False
+            self._last_data_time = 0
+            
+            # Immediately publish reset status to update UI
+            self._event_bus.publish_event(
+                EventType.DATA_SENT,
+                data={
+                    "num_channels": 0,
+                    "num_samples": 0,
+                    "messages_sent": self._messages_sent,
+                    "queue_size": 0,
+                    "delay_ms": 0.0,
+                    "avg_delay_ms": 0.0,
+                    "calculated_sample_rate": 0.0,
+                    "mean_sample_rate": 0.0,
+                    "data_flow_active": False,
+                    "chunk_delay_ms": 0.0
+                },
+                source="OSCService"
+            )
             print("OSC metrics reset due to data reinit")
     
     def configure(self, **kwargs) -> None:

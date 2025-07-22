@@ -201,6 +201,11 @@ class ZMQService:
             if self.data_manager.auto_reinit_enabled:
                 # Perform automatic reinit
                 previous_state = self.data_manager.reinit_for_new_setup()
+                
+                # Reset chunk delay tracking
+                self._last_chunk_samples = 0
+                self._chunk_delay_ms = 0.0
+                
                 self._event_bus.publish_event(
                     EventType.STATUS_UPDATE,
                     data={
@@ -226,6 +231,11 @@ class ZMQService:
     def manual_reinit_data_manager(self) -> dict:
         """Manually reinitialize DataManager (triggered by user)."""
         previous_state = self.data_manager.reinit_for_new_setup()
+        
+        # Reset chunk delay tracking
+        self._last_chunk_samples = 0
+        self._chunk_delay_ms = 0.0
+        
         self._event_bus.publish_event(
             EventType.STATUS_UPDATE,
             data={

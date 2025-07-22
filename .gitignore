@@ -299,3 +299,6 @@ docs/build/
 htmlcov/
 .coverage
 coverage.xml
+
+.claude/
+.ruff_cache/

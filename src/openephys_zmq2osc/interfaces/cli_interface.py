@@ -277,11 +277,23 @@ class CLIInterface(BaseInterface):
             channels_info = f"{self._channel_info['total_channels']} channels ready"
             grid.add_row("Channels", f"[val_success]{channels_info}[/val_success]")
 
+            # Show input sampling rate (from OSC status since that's where it's tracked)
+            data_active = self._osc_status.get("data_flow_active", False)
+            input_rate = self._osc_status.get("calculated_sample_rate", 30000.0)
+
+            if data_active and input_rate > 0:
+                input_rate_text = f"{input_rate:.1f}"
+                grid.add_row("Sample Rate", f"{input_rate_text} Hz")
+            elif not data_active:
+                grid.add_row("Sample Rate", "[dim]0 Hz *no data[/dim]")
+            else:
+                grid.add_row("Sample Rate", "[dim]30000.0 Hz(default)[/dim]")
+
             # Show batch delay information
             samples_per_batch = self._timeout_status["samples_per_batch"]
             batch_delay = self._timeout_status["batch_delay_ms"]
             if samples_per_batch > 0:
-                batch_info = f"{samples_per_batch} s/p ({batch_delay:.1f} ms)"
+                batch_info = f"{samples_per_batch} s/b ({batch_delay:.1f} ms)"
                 grid.add_row("", f"[dim]{batch_info}[/dim]")
 
             # Show channel list with OSC mapping (first few channels)
@@ -358,6 +370,31 @@ class CLIInterface(BaseInterface):
 
         grid.add_row("", Rule(style="grid_rule"))
 
+        
+        # Downsampling information
+        downsampling_factor = self._osc_status.get("downsampling_factor", 1)
+        downsampling_method = self._osc_status.get("downsampling_method", "average")
+
+        if downsampling_factor > 1:
+            downsampling_text = f"ENABLED ({downsampling_factor}:1)"
+            grid.add_row("Downsampling", downsampling_text)
+            grid.add_row("DS Method", downsampling_method.title())
+        else:
+            downsampling_text = "DISABLED"
+            grid.add_row("Downsampling", f"[dim]{downsampling_text}[/dim]")
+
+        # Batch size and batch delay
+        batch_size = self._osc_status.get("batch_size", 1)
+
+        # Show batching status with enabled/disabled indication
+        if batch_size > 1:
+            batching_text = f"ENABLED ({batch_size})"
+        else:
+            batching_text = f"DISABLED ({batch_size})"
+        grid.add_row("Batching", batching_text)
+
+        grid.add_row("", Rule(style="grid_rule"))
+
         # Configuration - show dynamic channel count
         if self._channel_info["total_channels"] > 0:
             channels_text = str(self._channel_info["total_channels"])
@@ -367,41 +404,38 @@ class CLIInterface(BaseInterface):
             channels_text = "Auto-detect"
         grid.add_row("Channels", channels_text)
 
-        # Dynamic sampling rate display with mean rate on separate lines
+        # Dynamic sampling rate display - show output rate after downsampling
         data_active = self._osc_status.get("data_flow_active", False)
-        current_rate = self._osc_status.get("calculated_sample_rate", 30000.0)
-        mean_rate = self._osc_status.get("mean_sample_rate", 30000.0)
+        input_rate = self._osc_status.get("calculated_sample_rate", 30000.0)
+        mean_input_rate = self._osc_status.get("mean_sample_rate", 30000.0)
+        downsampling_factor = self._osc_status.get("downsampling_factor", 1)
 
-        if data_active and current_rate > 0:
-            # Show current rate on first line
-            current_text = f"{current_rate:.1f}"
+        # Calculate actual output rates after downsampling
+        current_output_rate = input_rate / downsampling_factor if downsampling_factor > 1 else input_rate
+        mean_output_rate = mean_input_rate / downsampling_factor if downsampling_factor > 1 else mean_input_rate
+
+        if data_active and input_rate > 0:
+            # Show current output rate on first line
+            current_text = f"{current_output_rate:.1f} Hz"
             grid.add_row("Sample Rate", current_text)
-            # Show mean rate on second line if significantly different
-            if abs(current_rate - mean_rate) > 100:
-                mean_text = f"{mean_rate:.1f} (mean)"
+            # Show mean output rate on second line if significantly different
+            if abs(current_output_rate - mean_output_rate) > (100 / max(1, downsampling_factor)):
+                mean_text = f"{mean_output_rate:.1f} Hz (mean)"
                 grid.add_row("", f"[dim]{mean_text}[/dim]")
         elif not data_active:
             # Show zero with indicator when no data
-            grid.add_row("Sample Rate", "[dim]0 *no data[/dim]")
-            grid.add_row("", "[dim]0 (mean)[/dim]")
+            grid.add_row("Sample Rate", "[dim]0 Hz *no data[/dim]")
+            grid.add_row("", "[dim]0 Hz (mean)[/dim]")
         else:
-            grid.add_row("Sample Rate", "30000 (default)")
-            grid.add_row("", "[dim]30000 (mean)[/dim]")
+            default_output = 30000.0 / downsampling_factor if downsampling_factor > 1 else 30000.0
+            grid.add_row("Sample Rate", f"{default_output:.1f} Hz (default)")
+            grid.add_row("", f"[dim]{default_output:.1f} Hz (mean)[/dim]")
 
-        # Batch size and batch delay
-        batch_size = self._osc_status.get("batch_size", 1)
-        mean_rate = self._osc_status.get("mean_sample_rate", 30000.0)
-
-        # Show batching status with enabled/disabled indication
-        if batch_size > 1:
-            batching_text = f"ENABLED ({batch_size})"
-        else:
-            batching_text = f"DISABLED ({batch_size})"
-        grid.add_row("Batching", batching_text)
+        
 
         # Calculate and display batch delay (avoid division by zero)
-        if mean_rate > 0:
-            batch_delay_ms = (batch_size / mean_rate) * 1000
+        if mean_input_rate > 0:
+            batch_delay_ms = (batch_size / mean_input_rate) * 1000
             if batch_delay_ms < 1.0:
                 delay_text = f"{batch_delay_ms:.2f} ms"
             else:
@@ -410,22 +444,7 @@ class CLIInterface(BaseInterface):
         else:
             grid.add_row("Batch Delay", "[dim]-- ms[/dim]")
 
-        # Downsampling information
-        downsampling_factor = self._osc_status.get("downsampling_factor", 1)
-        downsampling_method = self._osc_status.get("downsampling_method", "average")
-        
-        if downsampling_factor > 1:
-            downsampling_text = f"ENABLED ({downsampling_factor}:1)"
-            grid.add_row("Downsampling", downsampling_text)
-            grid.add_row("DS Method", downsampling_method.title())
-            
-            # Show effective output rate
-            if mean_rate > 0:
-                effective_rate = mean_rate / downsampling_factor
-                grid.add_row("Output Rate", f"{effective_rate:.1f} Hz")
-        else:
-            downsampling_text = "DISABLED"
-            grid.add_row("Downsampling", f"[dim]{downsampling_text}[/dim]")
+
 
         grid.add_row(Rule(style="grid_rule"), Rule(style="grid_rule"))
 
@@ -459,19 +478,19 @@ class CLIInterface(BaseInterface):
             else:
                 # Get queue max size for percentage calculation
                 queue_max_size = 100  # Default, should be read from config
-                if hasattr(self.config, 'performance') and hasattr(self.config.performance, 'osc_queue_max_size'):
+                if hasattr(self.config, "performance") and hasattr(self.config.performance, "osc_queue_max_size"):
                     queue_max_size = self.config.performance.osc_queue_max_size
-                
+
                 # Calculate queue percentage and apply color coding
                 queue_percentage = (queue_size / queue_max_size) * 100 if queue_max_size > 0 else 0
-                
+
                 if queue_percentage >= 80:
                     queue_color = "val_error"  # Red
                 elif queue_percentage >= 50:
                     queue_color = "val_warning"  # Yellow
                 else:
                     queue_color = "white"  # Normal
-                
+
                 stats = f"Sent: {messages_sent} | Queue: [{queue_color}]{queue_size}[/{queue_color}]"
 
             grid.add_row("Messages", stats)
@@ -479,7 +498,7 @@ class CLIInterface(BaseInterface):
             # Drop counter display (always show if drops occurred)
             #   Overflows:      Number of times the queue reached capacity (overflow events)
             #   Drops Total:    Total number of individual messages that were actually dropped
-            
+
             overflows = self._osc_status.get("queue_overflows", 0)  # Queue overflows called
             dropped = self._osc_status.get("messages_dropped", 0)   # Messages dropped
 
@@ -487,7 +506,7 @@ class CLIInterface(BaseInterface):
             if dropped > 0:
                 drop_text = f"Drops! {dropped} batches"
                 grid.add_row("", f"[val_error]{drop_text}[/val_error]")
-            
+
             if overflows > 0 or dropped > 0:
                 perf_text = f"{overflows}"
                 grid.add_row("! onOverflows", f"[val_warning]{perf_text}[/val_warning]")

@@ -15,7 +15,8 @@
       "Bash(timeout:*)",
       "Bash(ls:*)",
       "Bash(cp:*)",
-      "Bash(true)"
+      "Bash(true)",
+      "Bash(sed:*)"
     ],
     "deny": []
   }

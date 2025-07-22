@@ -1,7 +1,7 @@
 import json
-from typing import Dict, Any, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 
 @dataclass
@@ -24,13 +24,13 @@ class OSCConfig:
     base_address: str = "/data"
     send_individual_channels: bool = False
     channel_address_format: str = "/ch{:03d}"
-    
+
     # Downsampling configuration (for individual sample mode)
-    downsampling_factor: int = 8  # 1 = no downsampling, 30 = 30:1 reduction
+    downsampling_factor: int = 30  # 1 = no downsampling, 30 = 30:1 reduction
     downsampling_method: str = "average"  # "average", "decimate"
-    
+
     # Chunk batch mode configuration
-    chunk_format: str = "timestamped"  # "timestamped", "simple_array"
+    chunk_format: str = "simple_array"  # "timestamped", "simple_array"
     chunk_include_metadata: bool = True
 
 
@@ -54,7 +54,7 @@ class PerformanceConfig:
     """Performance optimization settings for high-throughput scenarios."""
 
     # OSC batching configuration
-    osc_batch_size: int = 1  # Number of samples per OSC message (1 = no batching)
+    osc_batch_size: int = 2  # Number of samples per OSC message (1 = no batching)
     osc_queue_max_size: int = 100  # Maximum queue size before overflow handling
     osc_queue_overflow_strategy: str = (
         "drop_oldest"  # "drop_oldest", "drop_newest", "block"
@@ -68,7 +68,7 @@ class PerformanceConfig:
     mode: str = "balanced"  # "low_latency", "balanced", "high_throughput"
 
     # Advanced settings
-    enable_batching: bool = False  # Master switch for batching optimizations
+    enable_batching: bool = True  # Master switch for batching optimizations
     adaptive_batching: bool = False  # Automatically adjust batch size based on load
 
 
@@ -80,12 +80,12 @@ class Config:
     app: AppConfig
     performance: PerformanceConfig
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert config to dictionary."""
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Config":
+    def from_dict(cls, data: dict[str, Any]) -> "Config":
         """Create config from dictionary."""
         return cls(
             zmq=ZMQConfig(**data.get("zmq", {})),
@@ -95,7 +95,7 @@ class Config:
             performance=PerformanceConfig(**data.get("performance", {})),
         )
 
-    def save_to_file(self, filepath: Optional[Path] = None) -> None:
+    def save_to_file(self, filepath: Path | None = None) -> None:
         """Save config to JSON file."""
         if filepath is None:
             filepath = Path(self.app.config_file)
@@ -108,7 +108,7 @@ class Config:
             print(f"Error saving configuration: {e}")
 
     @classmethod
-    def load_from_file(cls, filepath: Optional[Path] = None) -> "Config":
+    def load_from_file(cls, filepath: Path | None = None) -> "Config":
         """Load config from JSON file."""
         if filepath is None:
             filepath = Path("config.json")
@@ -118,7 +118,7 @@ class Config:
             return cls.get_default()
 
         try:
-            with open(filepath, "r") as f:
+            with open(filepath) as f:
                 data = json.load(f)
             return cls.from_dict(data)
         except Exception as e:
@@ -138,10 +138,10 @@ class Config:
 
 
 class ConfigManager:
-    def __init__(self, config_path: Optional[Path] = None):
+    def __init__(self, config_path: Path | None = None):
         self.config_path = config_path or Path("config.json")
-        self._config: Optional[Config] = None
-        self._watchers: Dict[str, list] = {}
+        self._config: Config | None = None
+        self._watchers: dict[str, list] = {}
 
     @property
     def config(self) -> Config:
@@ -211,7 +211,7 @@ class ConfigManager:
 
 
 # Global configuration manager instance
-_config_manager: Optional[ConfigManager] = None
+_config_manager: ConfigManager | None = None
 
 
 def get_config_manager() -> ConfigManager:

@@ -1,8 +1,9 @@
 import threading
-from typing import Dict, List, Callable, Any
-from enum import Enum
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
+from typing import Any
 
 
 class EventType(Enum):
@@ -41,7 +42,7 @@ class Event:
 
 class EventBus:
     def __init__(self):
-        self._subscribers: Dict[EventType, List[Callable[[Event], None]]] = {}
+        self._subscribers: dict[EventType, list[Callable[[Event], None]]] = {}
         self._lock = threading.RLock()
 
     def subscribe(

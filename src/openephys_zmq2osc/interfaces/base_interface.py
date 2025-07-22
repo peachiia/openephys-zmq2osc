@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Any
+
 from ..config.settings import Config
 
 
@@ -21,17 +22,17 @@ class BaseInterface(ABC):
         pass
 
     @abstractmethod
-    def update_zmq_status(self, status_data: Dict[str, Any]) -> None:
+    def update_zmq_status(self, status_data: dict[str, Any]) -> None:
         """Update ZMQ connection status display."""
         pass
 
     @abstractmethod
-    def update_osc_status(self, status_data: Dict[str, Any]) -> None:
+    def update_osc_status(self, status_data: dict[str, Any]) -> None:
         """Update OSC connection status display."""
         pass
 
     @abstractmethod
-    def update_data_stats(self, stats_data: Dict[str, Any]) -> None:
+    def update_data_stats(self, stats_data: dict[str, Any]) -> None:
         """Update data processing statistics."""
         pass
 

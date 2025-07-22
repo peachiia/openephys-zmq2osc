@@ -1,13 +1,13 @@
-import zmq
 import json
-import time
-import numpy as np
 import threading
+import time
 from enum import Enum
-from typing import Optional, Dict, Any
 
+import numpy as np
+import zmq
+
+from ..events.event_bus import EventType, get_event_bus
 from ..models.openephys_objects import OpenEphysEventObject, OpenEphysSpikeObject
-from ..events.event_bus import get_event_bus, EventType, Event
 from .data_manager import DataManager
 
 
@@ -23,10 +23,10 @@ class ConnectionStatus(Enum):
 
 class ZMQService:
     def __init__(self, ip: str = "localhost", data_port: int = 5556, config=None):
-        self.context: Optional[zmq.Context] = None
-        self.heartbeat_socket: Optional[zmq.Socket] = None
-        self.data_socket: Optional[zmq.Socket] = None
-        self.poller: Optional[zmq.Poller] = None
+        self.context: zmq.Context | None = None
+        self.heartbeat_socket: zmq.Socket | None = None
+        self.data_socket: zmq.Socket | None = None
+        self.poller: zmq.Poller | None = None
 
         self.ip = ip
         self.data_port = data_port
@@ -62,7 +62,7 @@ class ZMQService:
 
         # Threading
         self._running = False
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
         self._event_bus = get_event_bus()
 
         # Batch delay tracking

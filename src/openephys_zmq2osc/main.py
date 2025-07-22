@@ -1,21 +1,20 @@
+import argparse
 import signal
 import sys
 import time
-import argparse
 from pathlib import Path
-from typing import Optional
 
-from openephys_zmq2osc.config.settings import get_config_manager, ConfigManager
-from openephys_zmq2osc.core.services.zmq_service import ZMQService
+from openephys_zmq2osc.config.settings import ConfigManager, get_config_manager
+from openephys_zmq2osc.core.events.event_bus import EventType, get_event_bus
 from openephys_zmq2osc.core.services.osc_service import OSCService
+from openephys_zmq2osc.core.services.zmq_service import ZMQService
 from openephys_zmq2osc.interfaces.cli_interface import CLIInterface
-from openephys_zmq2osc.core.events.event_bus import get_event_bus, EventType
 
 
 class OpenEphysZMQ2OSC:
     """Main application class."""
 
-    def __init__(self, config_path: Optional[Path] = None):
+    def __init__(self, config_path: Path | None = None):
         # Initialize configuration
         self.config_manager = (
             ConfigManager(config_path) if config_path else get_config_manager()

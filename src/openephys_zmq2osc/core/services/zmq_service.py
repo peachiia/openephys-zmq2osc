@@ -299,7 +299,8 @@ class ZMQService:
             header = json.loads(message[1].decode("utf-8"))
 
             if header["message_num"] != self.message_num + 1:
-                print("Missed a message at number", self.message_num + 1)
+                # Silently handle missed messages - this is normal due to network/processing delays
+                pass
 
             self.message_num = header["message_num"]
 

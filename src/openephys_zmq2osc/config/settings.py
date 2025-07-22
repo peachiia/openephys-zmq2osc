@@ -90,11 +90,29 @@ class Config:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Config":
-        """Create config from dictionary."""
+        """Create config from dictionary, handling both full and minimal formats."""
+        # Handle ZMQ config
+        zmq_data = data.get("zmq", {})
+        
+        # Handle performance data that might be split between performance section and ZMQ section
+        performance_data = data.get("performance", {})
+        
+        # Map minimal config ZMQ timeout fields to full config fields
+        if "zmq_not_responding_timeout" in performance_data:
+            zmq_data["not_responding_timeout"] = performance_data["zmq_not_responding_timeout"]
+        if "zmq_data_timeout_seconds" in performance_data:
+            zmq_data["data_timeout_seconds"] = performance_data["zmq_data_timeout_seconds"]
+        if "zmq_auto_reinit_on_timeout" in performance_data:
+            zmq_data["auto_reinit_on_timeout"] = performance_data["zmq_auto_reinit_on_timeout"]
+        
         # Handle OSC config with nested processing config
         osc_data = data.get("osc", {})
         if "processing" in osc_data:
-            processing_config = ProcessingConfig(**osc_data["processing"])
+            processing_data = osc_data["processing"].copy()
+            # Move enable_batching from processing to performance if present
+            if "enable_batching" in processing_data:
+                performance_data["enable_batching"] = processing_data.pop("enable_batching")
+            processing_config = ProcessingConfig(**processing_data)
         else:
             processing_config = ProcessingConfig()
 
@@ -104,12 +122,18 @@ class Config:
         )
         osc_config.processing = processing_config
 
+        # Clean up performance data by removing ZMQ-specific fields
+        clean_performance_data = {
+            k: v for k, v in performance_data.items() 
+            if not k.startswith("zmq_")
+        }
+
         return cls(
-            zmq=ZMQConfig(**data.get("zmq", {})),
+            zmq=ZMQConfig(**zmq_data),
             osc=osc_config,
             ui=UIConfig(**data.get("ui", {})),
             app=AppConfig(**data.get("app", {})),
-            performance=PerformanceConfig(**data.get("performance", {})),
+            performance=PerformanceConfig(**clean_performance_data),
         )
 
     def save_to_file(self, filepath: Path | None = None) -> None:
@@ -220,11 +244,49 @@ class ConfigManager:
                 except Exception as e:
                     print(f"Error in config watcher callback: {e}")
 
-    def create_sample_config(self) -> None:
+    def create_sample_config(self, minimal: bool = True) -> None:
         """Create a sample configuration file."""
         config = Config.get_default()
-        config.save_to_file(self.config_path)
-        print(f"Sample configuration created at {self.config_path}")
+        if minimal:
+            self._save_minimal_config(config, self.config_path)
+            print(f"Minimal configuration created at {self.config_path}")
+        else:
+            config.save_to_file(self.config_path)
+            print(f"Full configuration created at {self.config_path}")
+    
+    def _save_minimal_config(self, config: Config, filepath: Path) -> None:
+        """Save a minimal configuration format."""
+        minimal_data = {
+            "zmq": {
+                "host": config.zmq.host,
+                "data_port": config.zmq.data_port,
+                "app_uuid": config.zmq.app_uuid
+            },
+            "osc": {
+                "host": config.osc.host,
+                "port": config.osc.port,
+                "base_address": config.osc.base_address,
+                "processing": {
+                    "downsampling_factor": config.osc.processing.downsampling_factor,
+                    "downsampling_method": config.osc.processing.downsampling_method,
+                    "enable_batching": config.performance.enable_batching,
+                    "batch_size": config.osc.processing.batch_size
+                }
+            },
+            "performance": {
+                "zmq_not_responding_timeout": config.zmq.not_responding_timeout,
+                "zmq_data_timeout_seconds": config.zmq.data_timeout_seconds,
+                "zmq_auto_reinit_on_timeout": config.zmq.auto_reinit_on_timeout,
+                "osc_queue_max_size": config.performance.osc_queue_max_size,
+                "osc_queue_overflow_strategy": config.performance.osc_queue_overflow_strategy
+            }
+        }
+        
+        try:
+            with open(filepath, "w") as f:
+                json.dump(minimal_data, f, indent=2)
+        except Exception as e:
+            print(f"Error saving minimal configuration: {e}")
 
 
 # Global configuration manager instance

@@ -142,10 +142,10 @@ class OpenEphysZMQ2OSC:
         }
 
 
-def create_config_file(config_path: Path) -> None:
+def create_config_file(config_path: Path, minimal: bool = True) -> None:
     """Create a sample configuration file."""
     config_manager = ConfigManager(config_path)
-    config_manager.create_sample_config()
+    config_manager.create_sample_config(minimal=minimal)
 
 
 def main() -> None:
@@ -157,7 +157,8 @@ def main() -> None:
 Examples:
   openephys-zmq2osc                           # Run with default config
   openephys-zmq2osc --config my_config.json  # Run with custom config
-  openephys-zmq2osc --create-config          # Create sample config file
+  openephys-zmq2osc --create-config          # Create minimal config file (default)
+  openephys-zmq2osc --create-config-dev      # Create full config file with all options
   openephys-zmq2osc --zmq-host 192.168.1.100 # Override ZMQ host
   openephys-zmq2osc --osc-port 8000          # Override OSC port
         """,
@@ -173,7 +174,12 @@ Examples:
     parser.add_argument(
         "--create-config",
         action="store_true",
-        help="Create a sample configuration file and exit",
+        help="Create a minimal sample configuration file and exit",
+    )
+    parser.add_argument(
+        "--create-config-dev",
+        action="store_true", 
+        help="Create a full developer configuration file with all options and exit",
     )
 
     parser.add_argument("--zmq-host", help="Override ZMQ host address")
@@ -191,7 +197,12 @@ Examples:
     # Handle config creation
     if args.create_config:
         config_path = args.config or Path("config.json")
-        create_config_file(config_path)
+        create_config_file(config_path, minimal=True)
+        return
+    
+    if args.create_config_dev:
+        config_path = args.config or Path("config-dev.json")
+        create_config_file(config_path, minimal=False)
         return
 
     try:

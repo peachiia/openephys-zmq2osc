@@ -29,7 +29,8 @@ class OpenEphysZMQ2OSC:
         
         self.osc_service = OSCService(
             host=self.config.osc.host,
-            port=self.config.osc.port
+            port=self.config.osc.port,
+            config=self.config
         )
         
         # Initialize interface

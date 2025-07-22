@@ -12,7 +12,10 @@
       "Bash(python test:*)",
       "Bash(python:*)",
       "Bash(./openephys-zmq2osc-darwin-arm64:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(ls:*)",
+      "Bash(cp:*)",
+      "Bash(true)"
     ],
     "deny": []
   }

@@ -8,7 +8,7 @@ from ..events.event_bus import get_event_bus, EventType, Event
 
 
 class OSCService:
-    def __init__(self, host: str = "127.0.0.1", port: int = 10000):
+    def __init__(self, host: str = "127.0.0.1", port: int = 10000, config=None):
         self.host = host
         self.port = port
         self.client: Optional[udp_client.SimpleUDPClient] = None
@@ -18,6 +18,24 @@ class OSCService:
         self._data_queue = []
         self._queue_lock = threading.Lock()
         self._thread: Optional[threading.Thread] = None
+        
+        # Performance configuration
+        self._config = config
+        self._batch_size = 1  # Default to no batching
+        self._queue_max_size = 100
+        self._queue_overflow_strategy = "drop_oldest"
+        self._batching_enabled = True
+        
+        if config and hasattr(config, 'performance'):
+            perf = config.performance
+            self._batch_size = perf.osc_batch_size if perf.enable_batching else 1
+            self._queue_max_size = perf.osc_queue_max_size
+            self._queue_overflow_strategy = perf.osc_queue_overflow_strategy
+            self._batching_enabled = perf.enable_batching
+        
+        # Queue monitoring
+        self._queue_overflows = 0
+        self._messages_dropped = 0
         
         # Statistics
         self._messages_sent = 0
@@ -196,7 +214,12 @@ class OSCService:
                     self._sample_timestamps.pop(0)
                 self._update_sampling_rate()
             
+            # Queue management with overflow handling
             with self._queue_lock:
+                # Check if queue is full and handle overflow
+                if len(self._data_queue) >= self._queue_max_size:
+                    self._handle_queue_overflow()
+                
                 self._data_queue.append((receive_time, datalist, event.data.get("chunk_delay_ms", 0.0)))
     
     def _run(self) -> None:
@@ -227,8 +250,21 @@ class OSCService:
                 
                 self._send_data(datalist, delay_ms, chunk_delay)
             else:
-                # Minimal sleep for high-performance real-time processing
-                time.sleep(0.0001)  # 0.1ms instead of 1ms for lower latency
+                # Minimal sleep to prevent CPU spinning while still being responsive
+                time.sleep(0.001)  # 1ms - balance between CPU usage and responsiveness
+    
+    def _handle_queue_overflow(self) -> None:
+        """Handle queue overflow based on configured strategy."""
+        self._queue_overflows += 1
+        
+        if self._queue_overflow_strategy == "drop_oldest":
+            if self._data_queue:
+                self._data_queue.pop(0)
+                self._messages_dropped += 1
+        elif self._queue_overflow_strategy == "drop_newest":
+            # Don't add the new item (caller will handle)
+            self._messages_dropped += 1
+        # "block" strategy does nothing - queue will grow (original behavior)
     
     def _send_data(self, datalist: List[np.ndarray], delay_ms: float = 0.0, chunk_delay: float = 0.0) -> None:
         """Send data via OSC."""
@@ -253,6 +289,9 @@ class OSCService:
             display_rate = self._calculated_sample_rate if self._data_flow_active else 0.0
             display_mean_rate = self._mean_sample_rate if self._data_flow_active else 0.0
             
+            # Calculate actual OSC messages sent (accounting for batching)
+            actual_messages_sent = self._calculate_messages_sent(datalist)
+            
             # Publish send confirmation with delay and sampling rate info
             self._event_bus.publish_event(
                 EventType.DATA_SENT,
@@ -260,7 +299,11 @@ class OSCService:
                     "num_channels": len(datalist),
                     "num_samples": len(datalist[0]) if datalist else 0,
                     "messages_sent": self._messages_sent,
+                    "actual_osc_messages": actual_messages_sent,
+                    "batch_size": self._batch_size,
                     "queue_size": queue_size,
+                    "queue_overflows": self._queue_overflows,
+                    "messages_dropped": self._messages_dropped,
                     "delay_ms": delay_ms,
                     "avg_delay_ms": display_delay,
                     "calculated_sample_rate": display_rate,
@@ -284,22 +327,35 @@ class OSCService:
                 source="OSCService"
             )
     
+    def _calculate_messages_sent(self, datalist: List[np.ndarray]) -> int:
+        """Calculate actual number of OSC messages sent accounting for batching."""
+        if not datalist:
+            return 0
+            
+        total_samples = len(datalist[0]) if datalist else 0
+        
+        if self._batching_enabled and self._batch_size > 1:
+            # Calculate number of batch messages
+            return (total_samples + self._batch_size - 1) // self._batch_size
+        else:
+            # No batching - one message per sample
+            return total_samples
+    
     def _send_individual_channels(self, datalist: List[np.ndarray]) -> None:
         """Send each channel as individual OSC messages."""
         for channel_idx, channel_data in enumerate(datalist):
-            if isinstance(channel_data, np.ndarray):
-                channel_data = channel_data.tolist()
-            
             address = self.channel_address_format.format(channel_idx)
             
-            if isinstance(channel_data, list):
-                for sample in channel_data:
+            if isinstance(channel_data, np.ndarray):
+                # Convert to list once per channel instead of checking per sample
+                sample_list = channel_data.tolist()
+                for sample in sample_list:
                     self.client.send_message(address, sample)
             else:
                 self.client.send_message(address, channel_data)
     
     def _send_combined_data(self, datalist: List[np.ndarray]) -> None:
-        """Send all channels as combined data."""
+        """Send all channels as combined data with optional batching."""
         # Convert to numpy array and transpose for sample-wise sending
         if isinstance(datalist, list):
             data_array = np.array(datalist)
@@ -309,9 +365,35 @@ class OSCService:
         # Transpose to have samples as rows, channels as columns
         transposed_data = data_array.T
         
-        # Send each sample (all channels) as one message
-        for sample_idx, sample_data in enumerate(transposed_data):
-            self.client.send_message(self.base_address, sample_data.tolist())
+        if self._batching_enabled and self._batch_size > 1:
+            # Send samples in batches
+            self._send_batched_samples(transposed_data)
+        else:
+            # Fast path: send each sample individually (optimized)
+            # Pre-convert entire array to list once instead of per-sample conversion
+            sample_list = transposed_data.tolist()
+            for sample_data in sample_list:
+                self.client.send_message(self.base_address, sample_data)
+    
+    def _send_batched_samples(self, transposed_data: np.ndarray) -> None:
+        """Send samples in batches for improved performance."""
+        total_samples = len(transposed_data)
+        
+        # Convert entire array to list once for efficiency
+        sample_list = transposed_data.tolist()
+        
+        # Send samples in batches
+        for i in range(0, total_samples, self._batch_size):
+            end_idx = min(i + self._batch_size, total_samples)
+            
+            if end_idx - i == 1:
+                # Single sample - use original format (avoid extra conversion)
+                self.client.send_message(self.base_address, sample_list[i])
+            else:
+                # Multiple samples - send as batch with batch address
+                batch_data = sample_list[i:end_idx]
+                batch_address = f"{self.base_address}/batch/{len(batch_data)}"
+                self.client.send_message(batch_address, batch_data)
     
     def send_message(self, address: str, value: Union[float, int, str, List]) -> bool:
         """Send a custom OSC message."""

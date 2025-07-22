@@ -42,11 +42,32 @@ class AppConfig:
 
 
 @dataclass
+class PerformanceConfig:
+    """Performance optimization settings for high-throughput scenarios."""
+    # OSC batching configuration
+    osc_batch_size: int = 4  # Number of samples per OSC message (1 = no batching)
+    osc_queue_max_size: int = 100  # Maximum queue size before overflow handling
+    osc_queue_overflow_strategy: str = "drop_oldest"  # "drop_oldest", "drop_newest", "block"
+    
+    # UI and monitoring configuration
+    ui_update_interval_ms: int = 100  # UI update interval during high-throughput
+    metrics_collection_interval_ms: int = 250  # How often to collect detailed metrics
+    
+    # Performance mode presets
+    mode: str = "balanced"  # "low_latency", "balanced", "high_throughput"
+    
+    # Advanced settings
+    enable_batching: bool = True  # Master switch for batching optimizations
+    adaptive_batching: bool = False  # Automatically adjust batch size based on load
+
+
+@dataclass
 class Config:
     zmq: ZMQConfig
     osc: OSCConfig
     ui: UIConfig
     app: AppConfig
+    performance: PerformanceConfig
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary."""
@@ -59,7 +80,8 @@ class Config:
             zmq=ZMQConfig(**data.get('zmq', {})),
             osc=OSCConfig(**data.get('osc', {})),
             ui=UIConfig(**data.get('ui', {})),
-            app=AppConfig(**data.get('app', {}))
+            app=AppConfig(**data.get('app', {})),
+            performance=PerformanceConfig(**data.get('performance', {}))
         )
     
     def save_to_file(self, filepath: Optional[Path] = None) -> None:
@@ -99,7 +121,8 @@ class Config:
             zmq=ZMQConfig(),
             osc=OSCConfig(),
             ui=UIConfig(),
-            app=AppConfig()
+            app=AppConfig(),
+            performance=PerformanceConfig()
         )
 
 

@@ -60,7 +60,11 @@ class CLIInterface(BaseInterface):
             "host": config.osc.host,
             "port": config.osc.port,
             "messages_sent": 0,
+            "actual_osc_messages": 0,
+            "batch_size": 1,
             "queue_size": 0,
+            "queue_overflows": 0,
+            "messages_dropped": 0,
             "avg_delay_ms": 0.0,
             "calculated_sample_rate": 30000.0,
             "mean_sample_rate": 30000.0,
@@ -378,9 +382,27 @@ class CLIInterface(BaseInterface):
         
         # Statistics
         if self._osc_status["messages_sent"] > 0:
-            # Messages and queue info
-            stats = f"Sent: {self._osc_status['messages_sent']} | Queue: {self._osc_status['queue_size']}"
+            # Messages and queue info with batching metrics
+            messages_sent = self._osc_status['messages_sent']
+            actual_osc = self._osc_status.get('actual_osc_messages', messages_sent)
+            batch_size = self._osc_status.get('batch_size', 1)
+            queue_size = self._osc_status['queue_size']
+            
+            # Show efficiency gain from batching
+            if batch_size > 1 and actual_osc > 0:
+                efficiency = (messages_sent / actual_osc) if actual_osc > 0 else 1.0
+                stats = f"Sent: {messages_sent} | OSC: {actual_osc} | Batch: {batch_size} ({efficiency:.1f}x)"
+            else:
+                stats = f"Sent: {messages_sent} | Queue: {queue_size}"
+            
             grid.add_row("Messages", stats)
+            
+            # Queue performance metrics
+            overflows = self._osc_status.get('queue_overflows', 0)
+            dropped = self._osc_status.get('messages_dropped', 0)
+            if overflows > 0 or dropped > 0:
+                perf_text = f"Overflows: {overflows} | Dropped: {dropped}"
+                grid.add_row("", f"[val_warning]{perf_text}[/val_warning]")
             
             # Delay information
             delay_ms = self._osc_status.get("avg_delay_ms", 0.0)

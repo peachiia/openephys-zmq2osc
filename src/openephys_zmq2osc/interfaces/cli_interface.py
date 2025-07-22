@@ -479,7 +479,7 @@ class CLIInterface(BaseInterface):
             # Show efficiency gain from batching
             if batch_size > 1 and actual_osc > 0:
                 efficiency = (messages_sent / actual_osc) if actual_osc > 0 else 1.0
-                stats = f"Sent: {messages_sent} | OSC: {actual_osc} | Batch: {batch_size} ({efficiency:.1f}x)"
+                stats = f"Proc: {messages_sent} | OSC: {actual_osc} | Batch: {batch_size} ({efficiency:.1f}x)"
             else:
                 # Get queue max size for percentage calculation
                 queue_max_size = 100  # Default, should be read from config
@@ -500,22 +500,22 @@ class CLIInterface(BaseInterface):
                 else:
                     queue_color = "white"  # Normal
 
-                stats = f"Sent: {messages_sent} | Queue: [{queue_color}]{queue_size}[/{queue_color}]"
+                stats = f"Proc: {messages_sent} | Queue: [{queue_color}]{queue_size}[/{queue_color}]"
 
-            grid.add_row("Messages", stats)
+            grid.add_row("Data Blocks", stats)
 
             # Drop counter display (always show if drops occurred)
             #   Overflows:      Number of times the queue reached capacity (overflow events)
-            #   Drops Total:    Total number of individual messages that were actually dropped
+            #   Drops Total:    Total number of individual data blocks that were actually dropped
 
             overflows = self._osc_status.get(
                 "queue_overflows", 0
             )  # Queue overflows called
-            dropped = self._osc_status.get("messages_dropped", 0)  # Messages dropped
+            dropped = self._osc_status.get("messages_dropped", 0)  # Data blocks dropped
 
             # Drop counter display (always show if drops occurred)
             if dropped > 0:
-                drop_text = f"Drops! {dropped} batches"
+                drop_text = f"Drops! {dropped} blocks"
                 grid.add_row("", f"[val_error]{drop_text}[/val_error]")
 
             if overflows > 0 or dropped > 0:
@@ -547,7 +547,7 @@ class CLIInterface(BaseInterface):
             else:
                 grid.add_row("OSC Delay", "[dim]Calculating...[/dim]")
         else:
-            grid.add_row("No Data Sent", "")
+            grid.add_row("No Data Processed", "")
 
         return Panel(grid, title="OSC", border_style="default")
 
@@ -564,13 +564,20 @@ class CLIInterface(BaseInterface):
             info_text = self._info_messages[-1]  # Show most recent info
 
         # Left side - controls
-        left_controls = "[dim]Press Ctrl+C to quit | Ctrl+F to reinit[/dim]"
+        left_controls = "[dim]Press Ctrl+C to quit | [/dim]"
+
+        #grid.add_row(
+        #    left_controls,
+        #    info_text,
+        #    f"[dim]Refresh: {self.config.ui.refresh_rate}Hz[/dim]",
+        #)
 
         grid.add_row(
             left_controls,
-            info_text,
-            f"[dim]Refresh: {self.config.ui.refresh_rate}Hz[/dim]",
+            info_text, 
+            f"[dim]@peachiia[/dim]",
         )
+
 
         return Panel(grid, style="dim")
 

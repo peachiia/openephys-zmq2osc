@@ -33,6 +33,12 @@ class OSCService:
         self._sample_timestamps = []  # Track when samples arrive
         self._samples_per_message = 0
         self._calculated_sample_rate = 30000.0  # Default fallback
+        self._mean_sample_rate = 30000.0  # 10-second mean rate
+        self._rate_history = []  # Keep rate measurements for mean calculation
+        
+        # Data flow tracking
+        self._last_data_time = 0
+        self._data_flow_active = False
         
         # Configuration
         self.base_address = "/data"
@@ -87,7 +93,19 @@ class OSCService:
         total_samples = num_packets * self._samples_per_message
         
         # Calculate actual sampling rate
-        self._calculated_sample_rate = total_samples / time_span
+        current_rate = total_samples / time_span
+        self._calculated_sample_rate = current_rate
+        
+        # Update rate history for mean calculation (keep last 10 seconds of measurements)
+        current_time = time.time()
+        self._rate_history.append((current_time, current_rate))
+        
+        # Remove old measurements (older than 10 seconds)
+        self._rate_history = [(t, r) for t, r in self._rate_history if current_time - t <= 10.0]
+        
+        # Calculate mean rate from last 10 seconds
+        if self._rate_history:
+            self._mean_sample_rate = sum(r for _, r in self._rate_history) / len(self._rate_history)
     
     def get_delay_stats(self) -> dict:
         """Get current delay statistics."""
@@ -155,6 +173,10 @@ class OSCService:
         if datalist:
             receive_time = time.time()
             
+            # Update data flow tracking
+            self._last_data_time = receive_time
+            self._data_flow_active = True
+            
             # Track for delay calculation
             self._data_receive_times.append(receive_time)
             # Keep only recent timestamps
@@ -177,7 +199,14 @@ class OSCService:
     def _run(self) -> None:
         """Main processing loop."""
         while self._running:
+            current_time = time.time()
             data_to_process = None
+            
+            # Check if data flow has stopped (no data for 2 seconds)
+            if self._data_flow_active and (current_time - self._last_data_time) > 2.0:
+                self._data_flow_active = False
+                # Reset sampling rate when no data
+                self._calculated_sample_rate = 0.0
             
             with self._queue_lock:
                 if self._data_queue:
@@ -216,6 +245,11 @@ class OSCService:
             avg_delay = sum(self._recent_delays) / len(self._recent_delays) if self._recent_delays else 0.0
             queue_size = len(self._data_queue)
             
+            # Determine if we should show zero values with indicators
+            display_delay = avg_delay if self._data_flow_active else 0.0
+            display_rate = self._calculated_sample_rate if self._data_flow_active else 0.0
+            display_mean_rate = self._mean_sample_rate if self._data_flow_active else 0.0
+            
             # Publish send confirmation with delay and sampling rate info
             self._event_bus.publish_event(
                 EventType.DATA_SENT,
@@ -225,8 +259,10 @@ class OSCService:
                     "messages_sent": self._messages_sent,
                     "queue_size": queue_size,
                     "delay_ms": delay_ms,
-                    "avg_delay_ms": avg_delay,
-                    "calculated_sample_rate": self._calculated_sample_rate
+                    "avg_delay_ms": display_delay,
+                    "calculated_sample_rate": display_rate,
+                    "mean_sample_rate": display_mean_rate,
+                    "data_flow_active": self._data_flow_active
                 },
                 source="OSCService"
             )

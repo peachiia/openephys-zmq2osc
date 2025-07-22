@@ -6,22 +6,15 @@ Here's a list of instructions/prompts for a Claude AI agent, derived from the cu
 
 Use these instructions as prompts to guide your work on the project:
 
-- [ ] Resolve Binary Runtime Error: Investigate and fix the error that occurs when running the binary built by build.py. Ensure the application executes successfully.
+- [ ] seems like the datamanager reinit is not working properly (press ctrl+f to reset the channnels count but not worked, also it should automatically reset since the setting is enabled but it is not), fix it.
 
-- [ ] Clean Up num_channels: Locate and remove all instances of num_channels: int = 32 from the codebase and update the README to reflect this change, as channel detection is now automatic.
+- [ ] On UI, in zmq side, show the data recirved status (show if data recived timeout is reached
 
-- [ ] Fix ZMQ Channel Name Display: Implement a solution to correctly display ZMQ channel names in the UI, as they are currently appearing as empty.
+- [ ] On UI, in zmq side, show the auto reinit setting and status when occured (when the data recieved timeout is reached)
 
-- [ ] Analyze and Display OSC Delay:
+- [ ] the delay show in OSC side is good but when the data is not send from zmq it should show the delay as 0 (with some * or any sign to indicate that the data is not received)
 
-  - Examine the cause of the data delay and buffering on the OSC side, specifically when streaming multiple channels, and address why data persists after ZMQ streaming stops.
+- [ ] the sampling rate on osc side should be shown as 0 when the data is not received from zmq (with some * or any sign to indicate that the data is not received), during the startup it should be shown both current rate and mean rate (mean rate should be calculated from the last 10 seconds)
 
-  - Develop and integrate a mechanism to accurately calculate the actual delay in OSC data transmission.
 
-  - Ensure this calculated delay is clearly displayed in the UI.
 
-- [ ] Dynamic OSC Sampling Rate: Modify the OSC-side UI to dynamically calculate and display the actual sampling rate based on the incoming data, instead of using a fixed value.
-
-- [ ] Display OSC Channel Mapping: Add a UI element (e.g., a tree or list) to show the mapping between channel names and their corresponding OSC channels.
-
-- [ ] Clock in UI seems to display and update every 2 sends instead of every second. Investigate and fix this issue to ensure the clock updates correctly. Is the UI refresh rate is correctly implemented and functioning as intended?

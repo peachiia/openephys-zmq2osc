@@ -236,17 +236,8 @@ class ZMQService:
             return
             
         if event.data and event.data.get("type") == "execute_manual_reinit":
-            if not self.data_manager.is_receiving_data():
-                self.manual_reinit_data_manager()
-            else:
-                self._event_bus.publish_event(
-                    EventType.STATUS_UPDATE,
-                    data={
-                        "type": "manual_reinit_denied",
-                        "reason": "data_currently_receiving"
-                    },
-                    source="ZMQService"
-                )
+            # Always allow manual reinit when requested by user
+            self.manual_reinit_data_manager()
     
     def _reconnect(self) -> None:
         """Reconnect to OpenEphys server."""

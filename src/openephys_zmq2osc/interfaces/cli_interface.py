@@ -62,7 +62,9 @@ class CLIInterface(BaseInterface):
             "messages_sent": 0,
             "queue_size": 0,
             "avg_delay_ms": 0.0,
-            "calculated_sample_rate": 30000.0
+            "calculated_sample_rate": 30000.0,
+            "mean_sample_rate": 30000.0,
+            "data_flow_active": False
         }
         
         self._data_stats = {
@@ -85,8 +87,11 @@ class CLIInterface(BaseInterface):
         self._timeout_status = {
             "timeout_triggered": False,
             "manual_reinit_available": False,
-            "timeout_seconds": 5.0,
-            "time_until_timeout": 0.0
+            "timeout_seconds": config.zmq.data_timeout_seconds,
+            "auto_reinit_enabled": config.zmq.auto_reinit_on_timeout,
+            "time_until_timeout": 0.0,
+            "data_receiving": False,  # Start as false until data comes in
+            "last_data_time": 0.0
         }
         
         # Keyboard handling
@@ -194,6 +199,9 @@ class CLIInterface(BaseInterface):
         """Update all layout components."""
         if not self.layout:
             return
+        
+        # Check for data timeout before updating layout
+        self._check_data_timeout()
             
         self.layout["header"].update(self._create_header_panel())
         self.layout["left"].update(self._create_zmq_panel())
@@ -271,6 +279,26 @@ class CLIInterface(BaseInterface):
         else:
             grid.add_row("Channels", "Waiting for data...")
         
+        # Data timeout and auto-reinit status
+        grid.add_row("", "")
+        
+        # Show data receiving status and timeout info
+        if self._timeout_status["data_receiving"]:
+            timeout_seconds = int(self._timeout_status['timeout_seconds'])
+            grid.add_row("Data Status", f"[val_success]Receiving ({timeout_seconds} Secs.)[/val_success]")
+        else:
+            if self._timeout_status["timeout_triggered"]:
+                grid.add_row("Data Status", "[val_error]Timeout reached[/val_error]")
+            else:
+                grid.add_row("Data Status", "[val_warning]No data[/val_warning]")
+        
+        # Show auto-reinit setting and status
+        if self._timeout_status["auto_reinit_enabled"]:
+            auto_status = "[val_success]ON[/val_success]"
+        else:
+            auto_status = "[val_warning]Manual only[/val_warning] (Ctrl+F)"
+        grid.add_row("Auto-reinit", auto_status)
+        
         # Error messages
         if self._error_messages:
             grid.add_row("", "")
@@ -300,10 +328,20 @@ class CLIInterface(BaseInterface):
             channels_text = "Auto-detect"
         grid.add_row("Channels", channels_text)
         
-        # Dynamic sampling rate display
-        sample_rate = self._osc_status.get("calculated_sample_rate", 30000.0)
-        if sample_rate != 30000.0:
-            rate_text = f"{sample_rate:.1f} Hz"
+        # Dynamic sampling rate display with mean rate
+        data_active = self._osc_status.get("data_flow_active", False)
+        current_rate = self._osc_status.get("calculated_sample_rate", 30000.0)
+        mean_rate = self._osc_status.get("mean_sample_rate", 30000.0)
+        
+        if data_active and current_rate > 0:
+            # Show both current and mean rates when data is active
+            if abs(current_rate - mean_rate) > 100:  # Show both if they differ significantly
+                rate_text = f"{current_rate:.1f} Hz (mean: {mean_rate:.1f} Hz)"
+            else:
+                rate_text = f"{current_rate:.1f} Hz"
+        elif not data_active:
+            # Show zero with indicator when no data
+            rate_text = "[dim]0 Hz *no data[/dim]"
         else:
             rate_text = "30000 Hz (default)"
         grid.add_row("Sample Rate", rate_text)
@@ -333,11 +371,13 @@ class CLIInterface(BaseInterface):
             
             # Delay information
             delay_ms = self._osc_status.get("avg_delay_ms", 0.0)
-            if delay_ms > 0:
-                if delay_ms < 1.0:
+            data_active = self._osc_status.get("data_flow_active", False)
+            
+            if data_active and delay_ms > 0:
+                if delay_ms < 20.0:
                     delay_text = f"{delay_ms:.2f} ms"
                     delay_style = "val_success"  # Green for low delay
-                elif delay_ms < 5.0:
+                elif delay_ms < 300.0:
                     delay_text = f"{delay_ms:.1f} ms"
                     delay_style = "val_warning"  # Yellow for moderate delay
                 else:
@@ -345,6 +385,8 @@ class CLIInterface(BaseInterface):
                     delay_style = "val_error"    # Red for high delay
                 
                 grid.add_row("OSC Delay", f"[{delay_style}]{delay_text}[/{delay_style}]")
+            elif not data_active:
+                grid.add_row("OSC Delay", "[dim]0 ms *no data[/dim]")
             else:
                 grid.add_row("OSC Delay", "[dim]Calculating...[/dim]")
         else:
@@ -365,9 +407,7 @@ class CLIInterface(BaseInterface):
             info_text = self._info_messages[-1]  # Show most recent info
         
         # Left side - controls
-        left_controls = "[dim]Press Ctrl+C to quit[/dim]"
-        if self._timeout_status.get("manual_reinit_available", False):
-            left_controls += " | [val_warning]Ctrl+F to reinit[/val_warning]"
+        left_controls = "[dim]Press Ctrl+C to quit | Ctrl+F to reinit[/dim]"
         
         grid.add_row(
             left_controls,
@@ -420,6 +460,11 @@ class CLIInterface(BaseInterface):
             self._data_stats["channels_received"] = event.data.get("channel_num", 0)
             self._data_stats["last_update"] = datetime.now()
             
+            # Update data receiving status and timestamp
+            self._timeout_status["data_receiving"] = True
+            self._timeout_status["timeout_triggered"] = False
+            self._timeout_status["last_data_time"] = time.time()
+            
             # Update discovery status if in discovery mode
             discovery_status = event.data.get("discovery_status", {})
             if discovery_status.get("discovery_mode", False):
@@ -438,6 +483,8 @@ class CLIInterface(BaseInterface):
             self._osc_status["queue_size"] = event.data.get("queue_size", 0)
             self._osc_status["avg_delay_ms"] = event.data.get("avg_delay_ms", 0.0)
             self._osc_status["calculated_sample_rate"] = event.data.get("calculated_sample_rate", 30000.0)
+            self._osc_status["mean_sample_rate"] = event.data.get("mean_sample_rate", 30000.0)
+            self._osc_status["data_flow_active"] = event.data.get("data_flow_active", False)
             self._data_stats["samples_processed"] = event.data.get("num_samples", 0)
             self._update_layout()
 
@@ -469,6 +516,8 @@ class CLIInterface(BaseInterface):
             timeout_status = event.data.get("timeout_status", {})
             self._timeout_status.update(timeout_status)
             self._timeout_status["manual_reinit_available"] = True
+            self._timeout_status["data_receiving"] = False
+            self._timeout_status["timeout_triggered"] = True
             
             timeout_sec = timeout_status.get("timeout_seconds", 5)
             self.show_message(f"Data timeout ({timeout_sec}s) - Press Ctrl+F to reinit channels", "warning")
@@ -586,16 +635,33 @@ class CLIInterface(BaseInterface):
     
     def _handle_manual_reinit_request(self) -> None:
         """Handle manual reinit request via Ctrl+F."""
-        if self._timeout_status.get("manual_reinit_available", False):
-            # Publish manual reinit request event
-            self._event_bus.publish_event(
-                EventType.STATUS_UPDATE,
-                data={
-                    "type": "manual_reinit_request",
-                    "source": "cli_interface"
-                },
-                source="CLIInterface"
-            )
-            self.show_message("Manual reinit requested...", "info")
+        # Allow manual reinit at any time
+        self._event_bus.publish_event(
+            EventType.STATUS_UPDATE,
+            data={
+                "type": "manual_reinit_request",
+                "source": "cli_interface"
+            },
+            source="CLIInterface"
+        )
+        self.show_message("Manual reinit requested...", "info")
+    
+    def _check_data_timeout(self) -> None:
+        """Check if data has timed out and update status accordingly."""
+        if self._timeout_status["last_data_time"] == 0.0:
+            # No data received yet
+            return
+        
+        current_time = time.time()
+        time_since_data = current_time - self._timeout_status["last_data_time"]
+        timeout_seconds = self._timeout_status["timeout_seconds"]
+        
+        if time_since_data > timeout_seconds:
+            # Data has timed out
+            if self._timeout_status["data_receiving"]:
+                self._timeout_status["data_receiving"] = False
+                # Don't set timeout_triggered here as that's handled by ZMQ service events
         else:
-            self.show_message("Manual reinit not available (data is being received)", "warning")
+            # Data is still coming
+            if not self._timeout_status["data_receiving"] and not self._timeout_status["timeout_triggered"]:
+                self._timeout_status["data_receiving"] = True

@@ -23,7 +23,8 @@ class OpenEphysZMQ2OSC:
         # Initialize services
         self.zmq_service = ZMQService(
             ip=self.config.zmq.host,
-            data_port=self.config.zmq.data_port
+            data_port=self.config.zmq.data_port,
+            config=self.config
         )
         
         self.osc_service = OSCService(

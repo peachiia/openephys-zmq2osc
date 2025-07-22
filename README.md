@@ -88,11 +88,17 @@ Generate optimized configurations for different use cases:
 
 **To enable Sample Mode (direct channel transmission):**
 
-Set `"enable_batching": false` in the performance configuration. This sends data to `/data/sample` with format `[ch0, ch1, ch2, ...]` regardless of batch_size.
+Set `"enable_batching": true` in the performance configuration. This sends data to `/data/sample` with format `[ch0, ch1, ch2, ...]`. In sample mode, `batch_size` is **automatically overridden to 1** to ensure one sample per channel per message.
 
 **To enable Batch Mode (batched transmission):**
 
-Set `"enable_batching": true` in the performance configuration. This sends data to `/data/batch/<size>` with format `[num_channels, flattened_data]` where size is determined by the `batch_size` setting.
+Set `"enable_batching": false` in the performance configuration. This sends data to `/data/batch/<size>` with format `[num_channels, flattened_data]` where size is determined by the `batch_size` setting.
+
+**Important Batching Behavior:**
+
+- When `enable_batching=true`, the system **automatically forces** `batch_size=1` regardless of configuration
+- When `enable_batching=false` but `batch_size != 1`, the UI shows **OVERRIDDEN** to indicate the system is overriding your batch_size setting
+- Sample mode (`enable_batching=true`) MUST always have exactly one sample per channel to maintain /data/sample format compatibility
 
 **Sample Mode configuration example:**
 
@@ -104,7 +110,7 @@ Set `"enable_batching": true` in the performance configuration. This sends data 
     }
   },
   "performance": {
-    "enable_batching": false
+    "enable_batching": true
   }
 }
 ```
@@ -119,7 +125,7 @@ Set `"enable_batching": true` in the performance configuration. This sends data 
     }
   },
   "performance": {
-    "enable_batching": true,
+    "enable_batching": false,
     "osc_queue_max_size": 100,
     "osc_queue_overflow_strategy": "drop_oldest"
   }
@@ -143,15 +149,15 @@ The message format is determined by the `enable_batching` setting in the perform
 
 - **Address:** `/data/sample`
 - **Format:** `[ch0, ch1, ch2, ..., ch31]`
-- **Configuration:** Set `"enable_batching": false` in performance config
+- **Configuration:** Set `"enable_batching": true` in performance config
 - **Use Case:** Low-latency, direct channel data transmission
-- **Note:** Sends individual samples regardless of `batch_size` setting
+- **Note:** Automatically forces `batch_size=1` to ensure one sample per channel per message
 
 ### Batch Mode (Batched)
 
 - **Address:** `/data/batch/<batch_size>`
 - **Format:** `[num_channels, ch0_s1, ch1_s1, ..., ch0_s2, ch1_s2, ...]`
-- **Configuration:** Set `"enable_batching": true` in performance config  
+- **Configuration:** Set `"enable_batching": false` in performance config  
 - **Use Case:** Reduced message count via batching for high-throughput scenarios
 - **Note:** Uses `batch_size` to determine batch size, sends with channel count prefix
 
@@ -169,7 +175,7 @@ The message format is determined by the `enable_batching` setting in the perform
   },
   "performance": {
     "mode": "high_throughput",
-    "enable_batching": true
+    "enable_batching": false
   }
 }
 ```
@@ -188,7 +194,7 @@ The message format is determined by the `enable_batching` setting in the perform
   },
   "performance": {
     "mode": "low_latency",
-    "enable_batching": false
+    "enable_batching": true
   }
 }
 ```
@@ -256,7 +262,7 @@ Processing     Downsampling: 30:1 | Method: Average
 
 ### High CPU Usage
 
-- Enable batching: `"enable_batching": true`
+- Enable batch mode: `"enable_batching": false`
 - Increase batch size: `"batch_size": 50` (in osc.processing section)
 - Reduce UI refresh rate: `"refresh_rate": 5`
 

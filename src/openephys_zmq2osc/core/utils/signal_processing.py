@@ -186,6 +186,12 @@ class DataProcessor:
         self.downsampling_method = processing.downsampling_method
         self.batch_size = processing.batch_size
         self.batch_timeout_ms = processing.batch_timeout_ms
+        
+        # Override batch_size to 1 if enable_batching is False (sample mode)
+        if (hasattr(self.config, "performance") and 
+            not self.config.performance.enable_batching and 
+            self.batch_size != 1):
+            self.batch_size = 1
 
     def initialize(self, num_channels: int) -> None:
         """Initialize the processor with channel count."""

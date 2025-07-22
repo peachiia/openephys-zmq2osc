@@ -1,0 +1,25 @@
+{
+  "zmq": {
+    "host": "localhost",
+    "data_port": 5556,
+    "app_uuid": "1618"
+  },
+  "osc": {
+    "host": "127.0.0.1",
+    "port": 10000,
+    "base_address": "/data",
+    "processing": {
+      "downsampling_factor": 30,
+      "downsampling_method": "average",
+      "enable_batching": false,
+      "batch_size": 1
+    }
+  },
+  "performance": {
+    "zmq_not_responding_timeout": 10.0,
+    "zmq_data_timeout_seconds": 2.0,
+    "zmq_auto_reinit_on_timeout": true,
+    "osc_queue_max_size": 100,
+    "osc_queue_overflow_strategy": "drop_oldest"
+  }
+}

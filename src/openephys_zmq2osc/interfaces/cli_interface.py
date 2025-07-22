@@ -65,6 +65,8 @@ class CLIInterface(BaseInterface):
             "messages_sent": 0,
             "actual_osc_messages": 0,
             "batch_size": 1,
+            "original_batch_size": 1,
+            "enable_batching": True,
             "queue_size": 0,
             "queue_overflows": 0,
             "messages_dropped": 0,
@@ -384,12 +386,19 @@ class CLIInterface(BaseInterface):
 
         # Batch size and batch delay
         batch_size = self._osc_status.get("batch_size", 1)
+        original_batch_size = self._osc_status.get("original_batch_size", 1)
+        enable_batching = self._osc_status.get("enable_batching", True)
 
-        # Show batching status with enabled/disabled indication
-        if batch_size > 1:
+        # Show batching status with enabled/disabled indication and override warning
+        if enable_batching:
             batching_text = f"ENABLED ({batch_size})"
         else:
-            batching_text = f"DISABLED ({batch_size})"
+            batching_text = f"DISABLED"
+            
+        # Show override warning when enable_batching=False but original_batch_size != 1
+        if not enable_batching and original_batch_size != 1:
+            batching_text += f" [val_warning]OVR[/val_warning] ({original_batch_size}->1)"
+        
         grid.add_row("Batching", batching_text)
 
         grid.add_row("", Rule(style="grid_rule"))

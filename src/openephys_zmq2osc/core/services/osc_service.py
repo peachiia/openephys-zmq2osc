@@ -103,6 +103,14 @@ class OSCService:
                 source="OSCService",
             )
 
+            # Get batching configuration for UI display
+            enable_batching = True  # default
+            original_batch_size = self.data_processor.batch_size
+            if self._config and hasattr(self._config, "performance"):
+                enable_batching = self._config.performance.enable_batching
+            if self._config and hasattr(self._config, "osc") and hasattr(self._config.osc, "processing"):
+                original_batch_size = self._config.osc.processing.batch_size
+
             # Publish initial OSC status with processing config
             self._event_bus.publish_event(
                 EventType.OSC_CONNECTION_STATUS,
@@ -112,6 +120,8 @@ class OSCService:
                     "host": self.host,
                     "port": self.port,
                     "batch_size": self.data_processor.batch_size,
+                    "original_batch_size": original_batch_size,
+                    "enable_batching": enable_batching,
                     "messages_sent": 0,
                     "queue_size": 0,
                     "downsampling_factor": self.data_processor.downsampling_factor,
@@ -352,6 +362,14 @@ class OSCService:
                 self._mean_sample_rate if self._data_flow_active else 0.0
             )
 
+            # Get batching configuration for UI display
+            enable_batching = True  # default
+            original_batch_size = self.data_processor.batch_size
+            if self._config and hasattr(self._config, "performance"):
+                enable_batching = self._config.performance.enable_batching
+            if self._config and hasattr(self._config, "osc") and hasattr(self._config.osc, "processing"):
+                original_batch_size = self._config.osc.processing.batch_size
+
             # Publish send confirmation with processing info
             self._event_bus.publish_event(
                 EventType.DATA_SENT,
@@ -361,6 +379,8 @@ class OSCService:
                     "messages_sent": self._messages_sent,
                     "actual_osc_messages": actual_messages_sent,
                     "batch_size": self.data_processor.batch_size,
+                    "original_batch_size": original_batch_size,
+                    "enable_batching": enable_batching,
                     "queue_size": queue_size,
                     "queue_overflows": self._queue_overflows,
                     "messages_dropped": self._messages_dropped,
@@ -402,6 +422,7 @@ class OSCService:
 
         if not enable_batching:
             # Sample mode: /data/sample <ch0_data> <ch1_data> ... (no channel count prefix)
+            # In sample mode batch_size is forced to 1 so chunk_size should always be 1
             address = f"{self.base_address}/sample"
             message_data = flattened_data
         else:

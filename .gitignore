@@ -239,6 +239,7 @@ $RECYCLE.BIN/
 config.json
 *.config.json
 !sample_config.json
+config-dev.json
 
 # Log files
 *.log

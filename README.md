@@ -4,6 +4,9 @@ A high-performance, real-time data bridge for neuroscience applications. Receive
 
 For the kind of creative who sees no difference between patching signals in TouchDesigner and wiring electrodes into the brain.
 
+
+<img width="716" height="590" alt="Screenshot 2025-07-23 at 05 45 55" src="https://github.com/user-attachments/assets/7a0509ea-5dee-4cfe-9b5f-32aa9eb4ec65" />
+
 ## Features
 
 - **High-Performance Data Processing** - Handles 32+ channels at 30kHz with optimized batching
@@ -71,7 +74,7 @@ The config.json file is automatically generated in the current directory. Any ch
     "processing": {
       "downsampling_factor": 30,
       "downsampling_method": "average",
-      "enable_batching": true,
+      "enable_batching": false,
       "batch_size": 1
     }
   },
@@ -195,7 +198,7 @@ In this case, the bridge will downsample the data by a factor of 30 and then sen
 
 ### Max/MSP
 
-```max
+```text
 [udpreceive 10000]
 |
 [route /data/sample]
@@ -212,7 +215,7 @@ In this case, the bridge will downsample the data by a factor of 30 and then sen
 
 ### Pure Data
 
-```pd
+```text
 [netreceive 10000 1]
 |
 [route /data/sample]
